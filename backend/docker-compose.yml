@@ -1,0 +1,8 @@
+services:
+  worker:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - AGENT_WORKER_TOKEN=${AGENT_WORKER_TOKEN:?set AGENT_WORKER_TOKEN in your .env}
+    restart: unless-stopped

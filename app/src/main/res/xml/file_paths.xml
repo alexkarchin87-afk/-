@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="lectures" path="lectures/" />
+    <files-path name="generated_projects" path="generated_projects/" />
+    <files-path name="crashes" path="crashes/" />
+    <cache-path name="cache" path="." />
+    <external-files-path name="exports" path="exports/" />
+    <external-files-path name="apk_downloads" path="downloads/" />
+</paths>

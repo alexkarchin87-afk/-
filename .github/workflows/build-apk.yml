@@ -1,0 +1,52 @@
+name: Build debug APK
+
+# Собирает .apk при каждом пуше в main и по кнопке "Run workflow" вручную.
+# В репозитории нет закоммиченного gradle-wrapper (gradlew/gradlew.bat) —
+# Android Studio генерирует его сама при первом открытии проекта, поэтому
+# здесь ставим Gradle явно через setup-gradle и вызываем `gradle` напрямую,
+# а не `./gradlew`. Если позже добавите wrapper в репозиторий — замените
+# `gradle assembleDebug` на `./gradlew assembleDebug` для консистентности
+# с локальной сборкой.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept licenses and install SDK platform/build-tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Write local.properties (sdk.dir only — секреты НЕ коммитим)
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Assemble debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: voiceagent-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

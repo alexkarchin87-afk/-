@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VoiceAgent</string>
+    <string name="accessibility_service_description">Позволяет голосовому агенту читать экран и выполнять действия (нажатия, свайпы, ввод текста) по вашей команде.</string>
+    <string name="notif_channel_voice">Голосовой агент</string>
+    <string name="notif_listening">Слушаю…</string>
+    <string name="notif_thinking">Обрабатываю запрос…</string>
+
+    <!-- Углового виджета (WINDOWS/десктоп режим), см. ui/WindowsCornerPopup.kt -->
+    <string name="assistant_display_name">Ваня</string>
+    <string name="assistant_role_label">личный ИИ ассистент</string>
+    <string name="assistant_ready_label">готов помочь</string>
+    <string name="assistant_greeting">Чем могу помочь?</string>
+    <string name="assistant_greeting_hint">Напишите, что у вас на уме. Я помогу разобраться, придумать решение или просто начать.</string>
+</resources>
