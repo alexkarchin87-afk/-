@@ -44,6 +44,21 @@ jobs:
           if (-not (Test-Path dist/VanyaBridge/VanyaBridge.exe)) { throw 'EXE not found' }
           if (-not (Test-Path dist/VanyaBridge/_internal)) { throw 'PyInstaller runtime not found' }
           Get-Item dist/VanyaBridge/VanyaBridge.exe | Select-Object Name,Length
+      - name: Smoke-test real packaged EXE on Windows
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'vanyabridge-startup-failure.txt'
+          $exe = (Resolve-Path 'dist/VanyaBridge/VanyaBridge.exe').Path
+          $process = Start-Process -FilePath $exe -ArgumentList @('--smoke-test', $log) -PassThru
+          if (-not $process.WaitForExit(45000)) {
+            Stop-Process -Id $process.Id -Force
+            throw 'EXE startup smoke test timed out'
+          }
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log }
+            throw "EXE failed real startup smoke test (exit $($process.ExitCode))"
+          }
+          Write-Host 'REAL WINDOWS GUI / TLS / SQLITE STARTUP: PASS'
       - uses: actions/upload-artifact@v4
         with:
           name: VanyaBridge-Windows11-test-portable
