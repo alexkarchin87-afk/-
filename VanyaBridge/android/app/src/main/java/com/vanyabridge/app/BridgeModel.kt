@@ -13,7 +13,8 @@ import java.util.UUID
 data class BridgeState(
     val status: String = "Не подключено", val paired: Boolean = false, val connected: Boolean = false,
     val busy: Boolean = false, val snapshot: JSONObject = JSONObject(), val error: String = "",
-    val address: String = "", val sentVersion: Int = 0, val sentText: String = ""
+    val address: String = "", val sentVersion: Int = 0, val sentText: String = "",
+    val activeChatId: String? = null, val newChatKind: String? = null
 )
 
 class BridgeModel(application: Application) : AndroidViewModel(application) {
@@ -27,6 +28,7 @@ class BridgeModel(application: Application) : AndroidViewModel(application) {
     private var foreground = false
     private var generation = 0
     private var pendingCommand: Triple<String, String, String>? = null
+    private var pendingChatId: String? = null
 
     init {
         try {
@@ -119,14 +121,31 @@ class BridgeModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun selectChat(chatId: String?) {
+        mutable.value = mutable.value.copy(activeChatId = chatId, newChatKind = null)
+    }
+
+    fun createChat(kind: String) = action { active ->
+        val chat = active.post("/chats", JSONObject().put("kind", kind))
+        mutable.value = mutable.value.copy(activeChatId = chat.getString("id"), newChatKind = kind,
+            snapshot = active.get("/snapshot"))
+    }
+
+    fun clearChatDraftSignal() {
+        mutable.value = mutable.value.copy(newChatKind = null)
+    }
+
     fun send(text: String, mode: String) {
         if (mutable.value.busy || !mutable.value.connected || text.isBlank()) return
+        val chatId = mutable.value.activeChatId
         val previous = pendingCommand
-        val request = if (previous?.first == text && previous.second == mode) previous
-            else Triple(text, mode, UUID.randomUUID().toString()).also { pendingCommand = it }
+        val request = if (previous?.first == text && previous.second == mode && pendingChatId == chatId) previous
+            else Triple(text, mode, UUID.randomUUID().toString()).also { pendingCommand = it; pendingChatId = chatId }
         action {
-            it.post("/tasks", JSONObject().put("text", text).put("mode", mode).put("request_id", request.third))
+            it.post("/tasks", JSONObject().put("text", text).put("mode", mode)
+                .put("request_id", request.third).apply { if (chatId != null) put("chat_id", chatId) })
             pendingCommand = null
+            pendingChatId = null
             mutable.value = mutable.value.copy(sentVersion = mutable.value.sentVersion + 1, sentText = text)
         }
     }
@@ -150,7 +169,7 @@ class BridgeModel(application: Application) : AndroidViewModel(application) {
 
     fun forget() {
         generation++; reconnect?.cancel(); pairingJob?.cancel(); socket?.cancel(); client?.close(); client = null
-        secrets.clear(); pendingCommand = null
+        secrets.clear(); pendingCommand = null; pendingChatId = null
         mutable.value = BridgeState()
     }
 

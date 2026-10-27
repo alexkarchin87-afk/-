@@ -1,0 +1,87 @@
+name: Build VanyaBridge Windows EXE (test)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/vanyabridge-specialized-chats
+    paths:
+      - 'VanyaBridge/backend/**'
+      - 'VanyaBridge/desktop/**'
+      - 'VanyaBridge/desktop_entry.py'
+      - 'VanyaBridge/requirements*.txt'
+      - 'VanyaBridge/BUILD_WINDOWS.bat'
+      - '.github/workflows/vanyabridge-windows-test.yml'
+      - 'VanyaBridge/installer.iss'
+permissions:
+  contents: read
+jobs:
+  build-windows:
+    name: Windows 11 / Python 3.12 / portable
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: VanyaBridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install project and packaging dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-dev.txt pyinstaller==6.16.0
+          python -m pip check
+      - name: Run regression tests on native Windows
+        shell: pwsh
+        run: python -m pytest -q
+      - name: Build portable executable
+        shell: pwsh
+        run: python -m PyInstaller --noconfirm --clean --onedir --console --name VanyaBridge --collect-all playwright --collect-submodules uvicorn desktop_entry.py
+      - name: Verify executable and bundled runtime
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/VanyaBridge/VanyaBridge.exe)) { throw 'EXE not found' }
+          if (-not (Test-Path dist/VanyaBridge/_internal)) { throw 'PyInstaller runtime not found' }
+          Get-Item dist/VanyaBridge/VanyaBridge.exe | Select-Object Name,Length
+      - name: Smoke-test real packaged EXE on Windows
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'vanyabridge-startup-failure.txt'
+          $exe = (Resolve-Path 'dist/VanyaBridge/VanyaBridge.exe').Path
+          $process = Start-Process -FilePath $exe -ArgumentList @('--smoke-test', $log) -PassThru
+          if (-not $process.WaitForExit(25000)) {
+            Stop-Process -Id $process.Id -Force
+            if (Test-Path $log) { Get-Content $log }
+            throw 'EXE startup smoke test timed out'
+          }
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log }
+            throw "EXE failed real startup smoke test (exit $($process.ExitCode))"
+          }
+          Write-Host 'REAL WINDOWS GUI / TLS / SQLITE STARTUP: PASS'
+      - name: Create single-file Windows installer
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler not found' }
+          & $compiler 'installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Installer creation failed' }
+          if (-not (Test-Path 'installer-output/VanyaBridge-Setup-0.2.0-test.exe')) { throw 'Installer EXE missing' }
+          Get-FileHash 'installer-output/VanyaBridge-Setup-0.2.0-test.exe' -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VanyaBridge-Windows-Installer-Setup
+          path: VanyaBridge/installer-output/VanyaBridge-Setup-0.2.0-test.exe
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VanyaBridge-Windows11-test-portable
+          path: VanyaBridge/dist/VanyaBridge/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6

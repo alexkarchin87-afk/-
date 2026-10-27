@@ -15,6 +15,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, name TEXT, hash TEXT UNIQUE, active INTEGER);
         CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, owner TEXT, created REAL, body TEXT);
         CREATE TABLE IF NOT EXISTS audit(at REAL, task TEXT, event TEXT);
+        CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, owner TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, created REAL NOT NULL);
         ''')
         # Interrupted tasks never resume privileged actions after restart.
         for tid, body in self.db.execute('SELECT id, body FROM tasks').fetchall():
@@ -54,6 +55,23 @@ class Store:
         rows = self.db.execute('SELECT body FROM tasks WHERE owner=? OR ?=? ORDER BY created DESC LIMIT 50',
                                (owner, owner, 'desktop'))
         return [json.loads(row[0]) for row in rows]
+
+    def create_chat(self, owner, kind):
+        from backend.chat_types import CHAT_TYPES
+        if kind not in CHAT_TYPES:
+            raise ValueError('Неизвестный тип чата')
+        cid = secrets.token_hex(16)
+        title = CHAT_TYPES[kind]['marker'] + ' ' + CHAT_TYPES[kind]['label']
+        self.db.execute('INSERT INTO chats VALUES(?,?,?,?,?)', (cid, owner, kind, title, time.time()))
+        self.db.commit()
+        return dict(id=cid, owner=owner, kind=kind, title=title)
+
+    def chats(self, owner='desktop'):
+        rows = self.db.execute('SELECT id,owner,kind,title FROM chats WHERE owner=? ORDER BY created DESC', (owner,))
+        return [dict(zip(('id', 'owner', 'kind', 'title'), row)) for row in rows]
+
+    def owns_chat(self, cid, owner):
+        return self.db.execute('SELECT 1 FROM chats WHERE id=? AND owner=?', (cid, owner)).fetchone() is not None
 
     def audit(self, tid, event):
         # No request bodies, paths, URLs, tokens, codes, or exception strings.

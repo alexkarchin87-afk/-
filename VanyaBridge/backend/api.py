@@ -19,6 +19,11 @@ class Command(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     mode: str = 'Ultra Free'
     request_id: str = Field(min_length=36, max_length=36)
+    chat_id: str | None = Field(default=None, min_length=32, max_length=32)
+
+
+class NewChat(BaseModel):
+    kind: str = Field(pattern=r'^(code|photo|text|analysis)$')
 
 
 class Decision(BaseModel):
@@ -70,10 +75,14 @@ def create_app(engine, pairing):
     async def snapshot(authorization: str | None = Header(default=None)):
         return engine.snapshot(owner(authorization))
 
+    @app.post('/chats')
+    async def new_chat(body: NewChat, authorization: str | None = Header(default=None)):
+        return engine.store.create_chat(owner(authorization), body.kind)
+
     @app.post('/tasks')
     async def task(body: Command, authorization: str | None = Header(default=None)):
         did = owner(authorization)
-        return attempt(lambda: engine.submit(did, body.text, body.mode, body.request_id))
+        return attempt(lambda: engine.submit(did, body.text, body.mode, body.request_id, body.chat_id))
 
     @app.post('/tasks/{tid}/approval')
     async def approval(tid: str, body: Decision, authorization: str | None = Header(default=None)):

@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import org.json.JSONObject
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var model: BridgeModel
@@ -55,14 +56,62 @@ private fun BridgeScreen(model: BridgeModel, manualChat: (String) -> Unit, openI
     var draft by rememberSaveable { mutableStateOf("") }
     var approval by remember { mutableStateOf<JSONObject?>(null) }
     var lastSent by rememberSaveable { mutableIntStateOf(0) }
+    var chooser by remember { mutableStateOf(false) }
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val categories = listOf(
+        Triple("code", "■", "Код"),
+        Triple("photo", "▲", "Фото"),
+        Triple("text", "●", "Текст"),
+        Triple("analysis", "◆", "Анализ"),
+    )
+    LaunchedEffect(state.newChatKind) {
+        val kind = state.newChatKind ?: return@LaunchedEffect
+        draft = when (kind) {
+            "code" -> "Помоги с программированием. Моя задача: "
+            "photo" -> "Составь промпт для изображения. Идея: "
+            "text" -> "Помоги написать или отредактировать текст. Задача: "
+            else -> "Помоги проанализировать данные. Цель: "
+        }
+        model.clearChatDraftSignal()
+    }
     LaunchedEffect(state.sentVersion) {
         if (state.sentVersion != lastSent) {
             if (draft.trim() == state.sentText) draft = ""
             lastSent = state.sentVersion
         }
     }
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text("Сохранённые чаты", Modifier.padding(16.dp), style = MaterialTheme.typography.titleLarge)
+                Button(onClick = { chooser = true; scope.launch { drawer.close() } },
+                       modifier = Modifier.padding(horizontal = 16.dp)) { Text("+ Новый чат") }
+                NavigationDrawerItem(
+                    label = { Text("Старые задачи") },
+                    selected = state.activeChatId == null,
+                    onClick = { model.selectChat(null); scope.launch { drawer.close() } }
+                )
+                val saved = state.snapshot.optJSONArray("chats")
+                LazyColumn {
+                    items((0 until (saved?.length() ?: 0)).map { saved!!.getJSONObject(it) },
+                          key = { it.getString("id") }) { chat ->
+                        NavigationDrawerItem(
+                            label = { Text(chat.optString("title", "Чат")) },
+                            selected = state.activeChatId == chat.getString("id"),
+                            onClick = { model.selectChat(chat.getString("id")); scope.launch { drawer.close() } }
+                        )
+                    }
+                }
+            }
+        }
+    ) {
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(12.dp)) {
-        Text("VanyaBridge", style = MaterialTheme.typography.headlineSmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("VanyaBridge", style = MaterialTheme.typography.headlineSmall)
+            TextButton(onClick = { scope.launch { drawer.open() } }) { Text("☰ Чаты") }
+        }
         Text(state.status, style = MaterialTheme.typography.labelLarge)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf("Чат", "Связь", "Доступ").forEachIndexed { index, title ->
@@ -92,6 +141,10 @@ private fun BridgeScreen(model: BridgeModel, manualChat: (String) -> Unit, openI
                 }
                 val array = state.snapshot.optJSONArray("tasks")
                 val tasks = (0 until (array?.length() ?: 0)).map { array!!.getJSONObject(it) }
+                    .filter { task ->
+                        val cid = if (task.isNull("chat_id")) null else task.optString("chat_id")
+                        cid == state.activeChatId
+                    }
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (tasks.isEmpty()) item { Text("Попробуйте: «покажи файлы», «открой YouTube на компьютере», «открой VS Code».") }
                     items(tasks, key = { it.getString("id") }) { task ->
@@ -109,6 +162,26 @@ private fun BridgeScreen(model: BridgeModel, manualChat: (String) -> Unit, openI
                 }
             }
         }
+    }
+    }
+    if (chooser) {
+        AlertDialog(
+            onDismissRequest = { chooser = false },
+            title = { Text("Новый чат") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Выберите одну специализацию")
+                    categories.forEach { (kind, icon, title) ->
+                        TextButton(
+                            onClick = { model.createChat(kind); chooser = false; page = 0 },
+                            enabled = state.connected && !state.busy
+                        ) { Text("$icon  $title") }
+                    }
+                    if (!state.connected) Text("Для создания чата сначала подключите ПК")
+                }
+            },
+            confirmButton = { TextButton(onClick = { chooser = false }) { Text("Отмена") } }
+        )
     }
     approval?.let { task ->
         val plan = task.optJSONObject("plan")
