@@ -1,0 +1,56 @@
+name: Build VanyaBridge Windows 11 installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/windows-installer-2026-10-27]
+    paths:
+      - '.github/workflows/build-vanyabridge-installer.yml'
+      - 'VanyaBridge/**'
+      - 'packaging/windows/**'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Build Windows EXE
+        shell: pwsh
+        working-directory: VanyaBridge
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt "pyinstaller==6.16.0"
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name VanyaBridge --collect-all playwright --collect-submodules uvicorn desktop_entry.py
+          if (!(Test-Path "dist/VanyaBridge/VanyaBridge.exe")) { throw "EXE missing" }
+      - name: Smoke-test executable
+        shell: pwsh
+        working-directory: VanyaBridge
+        run: |
+          $p=Start-Process -FilePath "dist/VanyaBridge/VanyaBridge.exe" -PassThru
+          Start-Sleep -Seconds 8
+          $p.Refresh()
+          if ($p.HasExited) { throw "EXE exited unexpectedly with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Compile installer
+        shell: pwsh
+        working-directory: VanyaBridge
+        run: |
+          New-Item -ItemType Directory -Force -Path installer-output | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "..\packaging\windows\VanyaBridge.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
+          if (!(Test-Path "installer-output/VanyaBridge-Setup.exe")) { throw "Installer missing" }
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: VanyaBridge-Windows11-Setup
+          path: VanyaBridge/installer-output/VanyaBridge-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
