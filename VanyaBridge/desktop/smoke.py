@@ -22,7 +22,10 @@ def run_smoke():
             window.quit()
         messagebox.showerror = report_error
         try:
-            runtime.start()
+            try:
+                runtime.start()
+            except RuntimeError as exc:
+                raise RuntimeError(getattr(runtime, "failure_detail", str(exc))) from exc
             desktop = Desktop(window, runtime)
             window.update()
             if not window.winfo_viewable():

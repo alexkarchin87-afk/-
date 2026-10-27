@@ -2,6 +2,7 @@ import asyncio
 import os
 import queue
 import threading
+import traceback
 from pathlib import Path
 
 import uvicorn
@@ -44,22 +45,23 @@ class Runtime:
             asyncio.run(self._serve())
         except BaseException as error:
             self.failure = type(error).__name__
+            self.failure_detail = traceback.format_exc()
             self.ready.set()
             self.messages.put(('error', 'Сервер остановлен: ' + self.failure))
 
     async def _serve(self):
         self.loop = asyncio.get_running_loop()
         self.store = Store(self.data / 'history.db')
-        self.engine = Engine(self.store, BrowserAgent(self.root), SystemAgent(self.root))
-        self.pairing = Pairing(self.store)
-        app = create_app(self.engine, self.pairing)
-        config = uvicorn.Config(app, host=self.host, port=self.port, ssl_certfile=str(self.cert),
-                                ssl_keyfile=str(self.key), access_log=False, log_level='warning',
-                                ws='websockets', ws_max_size=8192, limit_concurrency=32,
-                                timeout_keep_alive=5)
-        self.server = uvicorn.Server(config)
-        running = asyncio.create_task(self.server.serve())
         try:
+            self.engine = Engine(self.store, BrowserAgent(self.root), SystemAgent(self.root))
+            self.pairing = Pairing(self.store)
+            app = create_app(self.engine, self.pairing)
+            config = uvicorn.Config(app, host=self.host, port=self.port, ssl_certfile=str(self.cert),
+                                    ssl_keyfile=str(self.key), access_log=False, log_level='warning',
+                                    ws='websockets', ws_max_size=8192, limit_concurrency=32,
+                                    timeout_keep_alive=5)
+            self.server = uvicorn.Server(config)
+            running = asyncio.create_task(self.server.serve())
             while not self.server.started:
                 if running.done():
                     await running
@@ -68,7 +70,8 @@ class Runtime:
             self.ready.set()
             await running
         finally:
-            await self.engine.close()
+            if hasattr(self, 'engine'):
+                await self.engine.close()
             self.store.close()
 
     def call(self, action, *args):
