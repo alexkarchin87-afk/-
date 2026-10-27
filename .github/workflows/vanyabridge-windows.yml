@@ -26,6 +26,12 @@ jobs:
         run: python -m pytest -q
       - name: Build Windows GUI
         run: python -m PyInstaller --noconfirm --clean --onedir --windowed --name VanyaBridge --collect-all playwright --collect-submodules uvicorn desktop_entry.py
+      - name: Smoke test packaged GUI and local status command
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath (Resolve-Path dist/VanyaBridge/VanyaBridge.exe) -ArgumentList '--smoke-test' -PassThru
+          if (!$process.WaitForExit(45000)) { Stop-Process -Id $process.Id -Force; throw 'EXE smoke test timed out' }
+          if ($process.ExitCode -ne 0) { throw "EXE smoke test failed: $($process.ExitCode)" }
       - name: Check binary and installer compiler
         shell: pwsh
         run: |

@@ -228,10 +228,15 @@ class Desktop:
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--smoke-test', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--host', default='127.0.0.1', help='Конкретный LAN IPv4; по умолчанию только этот ПК')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--data', default=None)
     args = parser.parse_args()
+    if args.smoke_test:
+        from desktop.smoke import run_smoke
+        run_smoke()
+        return
     window = tk.Tk()
     runtime = None
     try:
