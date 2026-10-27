@@ -44,7 +44,8 @@ jobs:
         working-directory: VanyaBridge
         run: |
           New-Item -ItemType Directory -Force -Path installer-output | Out-Null
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "..\packaging\windows\VanyaBridge.iss"
+          Copy-Item "..\packaging\windows\VanyaBridge.iss" ".\VanyaBridge.iss"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" ".\VanyaBridge.iss"
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
           if (!(Test-Path "installer-output/VanyaBridge-Setup.exe")) { throw "Installer missing" }
       - name: Upload installer
