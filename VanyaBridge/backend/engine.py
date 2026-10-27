@@ -89,6 +89,17 @@ class Engine:
         try:
             self.emit(task, 'Planner', 'Проверяю поддерживаемую команду', 'PLANNING')
             plan = self.planner.plan(task['input'], task['mode'])
+            if task.get('chat_id') is not None:
+                row = self.store.db.execute('SELECT kind FROM chats WHERE id=? AND owner=?',
+                                            (task['chat_id'], task['owner'])).fetchone()
+                if not row:
+                    raise ValueError('Специализация чата недоступна')
+                kind = row[0]
+                if plan.action in ('search_images', 'wallpaper') and kind != 'photo':
+                    raise ValueError('Изображения доступны только в чате «Фото». Создайте новый чат.')
+                if kind == 'photo' and plan.action not in ('search_images', 'wallpaper'):
+                    raise ValueError('Для этой команды нужен другой тип чата.')
+
             task['plan'] = asdict(plan)
             if not self.permissions[plan.action]:
                 raise ValueError('Действие выключено в разрешениях на ПК: ' + plan.action)
