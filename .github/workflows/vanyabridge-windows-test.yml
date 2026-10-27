@@ -37,7 +37,7 @@ jobs:
         run: python -m pytest -q
       - name: Build portable executable
         shell: pwsh
-        run: python -m PyInstaller --noconfirm --clean --onedir --windowed --name VanyaBridge --collect-all playwright --collect-submodules uvicorn desktop_entry.py
+        run: python -m PyInstaller --noconfirm --clean --onedir --console --name VanyaBridge --collect-all playwright --collect-submodules uvicorn desktop_entry.py
       - name: Verify executable and bundled runtime
         shell: pwsh
         run: |
@@ -50,8 +50,9 @@ jobs:
           $log = Join-Path $env:RUNNER_TEMP 'vanyabridge-startup-failure.txt'
           $exe = (Resolve-Path 'dist/VanyaBridge/VanyaBridge.exe').Path
           $process = Start-Process -FilePath $exe -ArgumentList @('--smoke-test', $log) -PassThru
-          if (-not $process.WaitForExit(45000)) {
+          if (-not $process.WaitForExit(25000)) {
             Stop-Process -Id $process.Id -Force
+            if (Test-Path $log) { Get-Content $log }
             throw 'EXE startup smoke test timed out'
           }
           if ($process.ExitCode -ne 0) {
