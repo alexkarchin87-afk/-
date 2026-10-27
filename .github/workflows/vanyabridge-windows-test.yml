@@ -11,6 +11,7 @@ on:
       - 'VanyaBridge/requirements*.txt'
       - 'VanyaBridge/BUILD_WINDOWS.bat'
       - '.github/workflows/vanyabridge-windows-test.yml'
+      - 'VanyaBridge/installer.iss'
 permissions:
   contents: read
 jobs:
@@ -60,6 +61,27 @@ jobs:
             throw "EXE failed real startup smoke test (exit $($process.ExitCode))"
           }
           Write-Host 'REAL WINDOWS GUI / TLS / SQLITE STARTUP: PASS'
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup --version=6.4.3 -y --no-progress
+
+      - name: Create single-file Windows installer
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler not found' }
+          & $compiler 'installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Installer creation failed' }
+          if (-not (Test-Path 'installer-output/VanyaBridge-Setup-0.2.0-test.exe')) { throw 'Installer EXE missing' }
+          Get-FileHash 'installer-output/VanyaBridge-Setup-0.2.0-test.exe' -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VanyaBridge-Windows-Installer-Setup
+          path: VanyaBridge/installer-output/VanyaBridge-Setup-0.2.0-test.exe
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
       - uses: actions/upload-artifact@v4
         with:
           name: VanyaBridge-Windows11-test-portable
