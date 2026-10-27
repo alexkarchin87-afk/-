@@ -5,7 +5,7 @@ import time
 import tkinter as tk
 
 from backend.runtime import Runtime
-from desktop.main import Desktop
+from desktop.main import Desktop, messagebox
 
 
 def run_smoke():
@@ -17,6 +17,10 @@ def run_smoke():
         window = tk.Tk()
         runtime = Runtime(port=port, data=data)
         error = []
+        def report_error(title, message):
+            error.append(f'{title}: {message}')
+            window.quit()
+        messagebox.showerror = report_error
         try:
             runtime.start()
             desktop = Desktop(window, runtime)

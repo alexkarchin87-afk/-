@@ -234,8 +234,17 @@ def main():
     parser.add_argument('--data', default=None)
     args = parser.parse_args()
     if args.smoke_test:
-        from desktop.smoke import run_smoke
-        run_smoke()
+        import os
+        import traceback
+        try:
+            from desktop.smoke import run_smoke
+            run_smoke()
+        except BaseException:
+            report = os.environ.get('VANYA_SMOKE_REPORT')
+            if report:
+                with open(report, 'w', encoding='utf-8') as output:
+                    output.write(traceback.format_exc())
+            raise SystemExit(1)
         return
     window = tk.Tk()
     runtime = None
