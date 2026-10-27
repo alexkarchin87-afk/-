@@ -58,6 +58,7 @@ class Runtime:
             app = create_app(self.engine, self.pairing)
             config = uvicorn.Config(app, host=self.host, port=self.port, ssl_certfile=str(self.cert),
                                     ssl_keyfile=str(self.key), access_log=False, log_level='warning',
+                                    log_config=None,  # Windowed EXE has no stdout/stderr.
                                     ws='websockets', ws_max_size=8192, limit_concurrency=32,
                                     timeout_keep_alive=5)
             self.server = uvicorn.Server(config)
