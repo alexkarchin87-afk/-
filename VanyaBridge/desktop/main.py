@@ -7,12 +7,14 @@ import uuid
 import webbrowser
 
 from backend.runtime import Runtime
+from backend.chat_types import CHAT_TYPES
 
 
 class Desktop:
     def __init__(self, window, runtime):
         self.window, self.runtime = window, runtime
         self.tasks, self.devices, self.pending, self.images = [], [], [], []
+        self.all_tasks, self.chats, self.active_chat = [], [], None
         self.last_snapshot = None
         self.submitting = False
         window.title('VanyaBridge · локальные агенты')
@@ -34,6 +36,13 @@ class Desktop:
         ttk.Combobox(chat, textvariable=self.mode, values=('Ultra Free', 'Standard'), state='readonly', width=15).pack(anchor='w', pady=6)
         self.agent_status = tk.StringVar(value='Planner · BrowserAgent · SystemAgent — локальные инструменты')
         ttk.Label(chat, textvariable=self.agent_status).pack(anchor='w')
+        navigation = ttk.Frame(chat)
+        navigation.pack(fill='x', pady=5)
+        ttk.Button(navigation, text='+ Новый чат', command=self.new_chat).pack(side='left')
+        ttk.Label(navigation, text='История чатов').pack(side='left', padx=12)
+        self.chatlist = tk.Listbox(chat, height=4, exportselection=False)
+        self.chatlist.pack(fill='x')
+        self.chatlist.bind('<<ListboxSelect>>', lambda _: self.select_chat())
         self.tasklist = tk.Listbox(chat, height=7, exportselection=False)
         self.tasklist.pack(fill='x', pady=8)
         self.tasklist.bind('<<ListboxSelect>>', lambda _: self.render_task())
@@ -107,6 +116,44 @@ class Desktop:
         widget.insert('1.0', text)
         widget.configure(state='disabled')
 
+    def new_chat(self):
+        dialog = tk.Toplevel(self.window)
+        dialog.title('Новый чат')
+        dialog.transient(self.window)
+        dialog.grab_set()
+        ttk.Label(dialog, text='Выберите специализацию нового чата', padding=12).pack()
+        colors = {'code': '#f3c342', 'photo': '#36c878', 'text': '#65a3ff', 'analysis': '#b58cf7'}
+        for kind, data in CHAT_TYPES.items():
+            line = ttk.Frame(dialog, padding=4)
+            line.pack(fill='x', padx=14)
+            tk.Label(line, text=data['marker'], fg=colors[kind],
+                     font=('Segoe UI Symbol', 16)).pack(side='left')
+            ttk.Button(line, text=data['label'], command=lambda k=kind: (
+                self.runtime.call('new_chat', k), dialog.destroy())).pack(side='left', padx=8)
+        ttk.Button(dialog, text='Отмена', command=dialog.destroy).pack(pady=10)
+
+    def select_chat(self):
+        selected = self.chatlist.curselection()
+        if not selected:
+            return
+        self.active_chat = None if selected[0] == 0 else self.chats[selected[0] - 1]['id']
+        self.filter_history()
+
+    def filter_history(self, previous_id=None):
+        self.tasks = [t for t in self.all_tasks if t.get('chat_id') == self.active_chat]
+        self.tasklist.delete(0, 'end')
+        for task in self.tasks:
+            self.tasklist.insert('end', f"{task['state']} · {task['input'][:85]}")
+        if self.tasks:
+            idx = next((i for i, t in enumerate(self.tasks) if t['id'] == previous_id), 0)
+            self.tasklist.selection_set(idx)
+            self.render_task()
+        else:
+            self.write(self.output, 'В этом чате ещё нет сообщений.')
+            self.images = []
+            self.image_choice['values'] = []
+            self.image_choice.set('')
+
     def selected_task(self):
         selected = self.tasklist.curselection()
         return self.tasks[selected[0]] if selected and selected[0] < len(self.tasks) else None
@@ -132,7 +179,7 @@ class Desktop:
         text = text if text is not None else self.input.get().strip()
         if text:
             self.submitting = True
-            self.runtime.call('submit', text, self.mode.get(), str(uuid.uuid4()))
+            self.runtime.call('submit', text, self.mode.get(), str(uuid.uuid4()), self.active_chat)
 
     def decide(self, approve):
         task = self.selected_task()
@@ -175,14 +222,17 @@ class Desktop:
         self.agent_status.set(' · '.join(a['name'] + ': ' + a['state'] for a in data['agents']))
         previous = self.selected_task()
         previous_id = previous['id'] if previous else None
-        self.tasks = data['tasks']
-        self.tasklist.delete(0, 'end')
-        for task in self.tasks:
-            self.tasklist.insert('end', f"{task['state']} · {task['input'][:85]}")
-        if self.tasks:
-            index = next((i for i,t in enumerate(self.tasks) if t['id'] == previous_id), 0)
-            self.tasklist.selection_set(index)
-            self.render_task()
+        self.all_tasks = data['tasks']
+        self.chats = data.get('chats', [])
+        self.chatlist.delete(0, 'end')
+        self.chatlist.insert('end', 'Старые задачи (без чата)')
+        for item in self.chats:
+            self.chatlist.insert('end', item['title'] + ' · ' + item['id'][:8])
+        idx = next((i + 1 for i, c in enumerate(self.chats) if c['id'] == self.active_chat), 0)
+        if idx == 0:
+            self.active_chat = None
+        self.chatlist.selection_set(idx)
+        self.filter_history(previous_id)
         self.pending, self.devices = data['pending'], data['devices']
         for widget, values in ((self.pairlist, [p['name'] for p in self.pending]),
                                (self.devicelist, [d['name'] + (' · подключён' if d['active'] else ' · отозван') for d in self.devices])):
@@ -204,6 +254,11 @@ class Desktop:
                     if value != self.last_snapshot:
                         self.snapshot(value)
                         self.last_snapshot = value
+                elif action == 'new_chat':
+                    self.active_chat = value['id']
+                    self.input.delete(0, 'end')
+                    self.input.insert(0, CHAT_TYPES[value['kind']]['prompt'])
+                    self.runtime.call('snapshot')
                 elif action == 'pair_code':
                     self.code.set('Одноразовый код: ' + value)
                 elif action == 'submit':
