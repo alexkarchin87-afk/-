@@ -23,7 +23,7 @@ class Command(BaseModel):
 
 
 class NewChat(BaseModel):
-    kind: str = Field(pattern=r'^(code|photo|text|analysis)
+    kind: str = Field(pattern=r'^(code|photo|text|analysis)$')
     approve: bool
 
 
