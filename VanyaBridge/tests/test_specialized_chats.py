@@ -57,3 +57,33 @@ def test_chat_modes_deny_cross_type_tools(tmp_path):
         await engine.close()
         store.close()
     asyncio.run(scenario())
+
+
+def test_chat_api_owner_isolation(tmp_path):
+    import httpx
+    from backend.api import create_app
+    from backend.security.pairing import Pairing
+
+    async def scenario():
+        store = Store(tmp_path / 'api.db')
+        engine = Engine(store, FakeTool(), FakeTool())
+        first, first_token = store.device('one')
+        second, second_token = store.device('two')
+        transport = httpx.ASGITransport(app=create_app(engine, Pairing(store)))
+        async with httpx.AsyncClient(transport=transport, base_url='https://test') as client:
+            first_headers = {'Authorization': 'Bearer ' + first_token}
+            other_headers = {'Authorization': 'Bearer ' + second_token}
+            unauthorized = await client.post('/chats', json={'kind': 'code'})
+            assert unauthorized.status_code == 401
+            created = await client.post('/chats', headers=first_headers, json={'kind': 'code'})
+            assert created.status_code == 200
+            chat = created.json()
+            assert chat['owner'] == first
+            assert len((await client.get('/snapshot', headers=first_headers)).json()['chats']) == 1
+            assert (await client.get('/snapshot', headers=other_headers)).json()['chats'] == []
+            denied = await client.post('/tasks', headers=other_headers, json=dict(
+                text='статус', mode='Ultra Free', request_id=str(uuid.uuid4()), chat_id=chat['id']))
+            assert denied.status_code == 400
+        await engine.close()
+        store.close()
+    asyncio.run(scenario())
