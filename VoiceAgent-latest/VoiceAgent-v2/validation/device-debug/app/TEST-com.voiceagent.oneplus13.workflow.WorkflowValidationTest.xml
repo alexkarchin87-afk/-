@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-24T17:09:21" hostname="ac7b89ae9c6b" time="0.003">
+  <properties/>
+  <testcase name="duplicateIdsAreFailure" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.002"/>
+  <testcase name="brokenEdgeIsFailure" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.0"/>
+  <testcase name="disconnectedBlocksAreFailure" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.0"/>
+  <testcase name="forkIsFailure" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.001"/>
+  <testcase name="linearGraphPreservesOrder" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.0"/>
+  <testcase name="disconnectedCycleIsFailure" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.0"/>
+  <testcase name="emptyGraphIsFailure" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.0"/>
+  <testcase name="cycleIsFailure" classname="com.voiceagent.oneplus13.workflow.WorkflowValidationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

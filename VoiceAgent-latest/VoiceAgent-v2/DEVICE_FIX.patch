@@ -1,0 +1,984 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -129,3 +129,18 @@
+     }
+ }
+ tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(genVoskUuid) }
++
++// Compile/unit tests remain available without model assets, but do not ship a voice APK without them.
++val verifyVoskModel by tasks.registering {
++    dependsOn(genVoskUuid)
++    doLast {
++        val dir = layout.projectDirectory.dir("src/main/assets/model-ru-small").asFile
++        fun present(name: String) = File(dir, name).let { it.isFile && it.length() > 0 }
++        val missing = listOf("uuid", "am/final.mdl", "conf/mfcc.conf").filterNot(::present).toMutableList()
++        if (!present("graph/HCLG.fst") && !(present("graph/HCLr.fst") && present("graph/Gr.fst"))) missing += "graph/FST"
++        check(missing.isEmpty()) {
++            "Vosk model missing/incomplete in app/src/main/assets/model-ru-small: ${missing.joinToString()}. Run sh scripts/download_vosk_model.sh, then rebuild."
++        }
++    }
++}
++tasks.matching { it.name in setOf("packageDebug", "packageRelease") }.configureEach { dependsOn(verifyVoskModel) }
+--- a/app/src/main/java/com/voiceagent/oneplus13/MainActivity.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/MainActivity.kt
+@@ -47,6 +47,7 @@
+ 
+     private var binder: VoiceAgentService.LocalBinder? by mutableStateOf(null)
+     private var isAgentRunning by mutableStateOf(false)
++    private var serviceBound = false
+ 
+     private val accountManager by lazy { AccountManager(this) }
+     private var signedInEmail: String? by mutableStateOf(null)
+@@ -92,6 +93,7 @@
+     private val connection = object : ServiceConnection {
+         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+             binder = service as? VoiceAgentService.LocalBinder
++            android.util.Log.i("VA_UI", "service=connected")
+             // Если пользователь раньше включил оверлей, а сервис только что
+             // (пере)запустился — досинхронизируем фактическое состояние пузыря.
+             if (UiPreferences(this@MainActivity).overlayEnabled) {
+@@ -100,6 +102,7 @@
+         }
+ 
+         override fun onServiceDisconnected(name: ComponentName?) {
++            android.util.Log.i("VA_UI", "service=disconnected")
+             binder = null
+         }
+     }
+@@ -150,6 +153,7 @@
+                                 onStartAgent = ::startVoiceAgent,
+                                 onStopAgent = ::stopVoiceAgent,
+                                 onSendText = { text -> binder?.sendText(text) },
++                                canSendText = { binder?.isReadyForText() == true },
+                                 onOpenAccessibilitySettings = {
+                                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                 },
+@@ -221,16 +225,19 @@
+     }
+ 
+     private fun stopVoiceAgent() {
+-        if (binder != null) {
++        if (serviceBound) {
+             unbindService(connection)
+-            binder = null
+-        }
++            serviceBound = false
++        }
++        binder = null
+         stopService(Intent(this, VoiceAgentService::class.java))
+         isAgentRunning = false
+     }
+ 
+     private fun bindToService() {
+-        bindService(Intent(this, VoiceAgentService::class.java), connection, Context.BIND_AUTO_CREATE)
++        if (serviceBound) return
++        serviceBound = bindService(Intent(this, VoiceAgentService::class.java), connection, Context.BIND_AUTO_CREATE)
++        android.util.Log.i("VA_UI", if (serviceBound) "service=binding" else "service=bind_failed")
+     }
+ 
+     private fun isServiceRunning(): Boolean {
+@@ -241,9 +248,11 @@
+     }
+ 
+     override fun onDestroy() {
+-        if (binder != null) {
++        if (serviceBound) {
+             runCatching { unbindService(connection) }
+-        }
++            serviceBound = false
++        }
++        binder = null
+         super.onDestroy()
+     }
+ }
+--- a/app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
+@@ -215,8 +215,15 @@
+      * логики распознавания намерений/действий.
+      */
+     inner class LocalBinder : Binder() {
++        fun isReadyForText(): Boolean = !initFailed && job.isActive && ::orchestrator.isInitialized
++
+         fun sendText(text: String) {
+-            if (!initFailed && ::orchestrator.isInitialized) scope.launch { orchestrator.handleTranscript(text, "text") }
++            if (!isReadyForText()) {
++                Log.i("VA_UI", "text=rejected reason=service_not_ready")
++                return
++            }
++            Log.i("VA_UI", "text=accepted")
++            scope.launch { orchestrator.handleTranscript(text, "text") }
+         }
+ 
+         fun setOverlayEnabled(enabled: Boolean) = this@VoiceAgentService.setOverlayEnabled(enabled)
+--- a/app/src/main/java/com/voiceagent/oneplus13/integrations/bot/TelegramBotService.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/integrations/bot/TelegramBotService.kt
+@@ -3,6 +3,7 @@
+ import android.app.Service
+ import android.content.Intent
+ import android.os.IBinder
++import android.util.Log
+ import androidx.core.app.NotificationCompat
+ import com.voiceagent.oneplus13.R
+ import com.voiceagent.oneplus13.VoiceAgentApp
+@@ -22,16 +23,21 @@
+ 
+     override fun onCreate() {
+         super.onCreate()
++        Log.i(TAG, "service=create")
+         bridge = MessengerBridge(TelegramClient(applicationContext), MaxClient(applicationContext))
+         startForeground(NOTIF_ID, buildNotification())
+         bridge.startPolling()
+     }
+ 
+-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
++    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
++        Log.i(TAG, "service=start sticky_restart=${intent == null}")
++        return START_STICKY
++    }
+ 
+     override fun onBind(intent: Intent?): IBinder? = null
+ 
+     override fun onDestroy() {
++        Log.i(TAG, "service=destroy")
+         bridge.stopPolling()
+         super.onDestroy()
+     }
+@@ -45,6 +51,7 @@
+             .build()
+ 
+     companion object {
++        private const val TAG = "VA_TELEGRAM"
+         private const val NOTIF_ID = 1002
+     }
+ }
+--- a/app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/MessengerBridge.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/MessengerBridge.kt
+@@ -1,5 +1,6 @@
+ package com.voiceagent.oneplus13.integrations.messenger
+ 
++import android.util.Log
+ import com.voiceagent.oneplus13.core.AgentEvent
+ import com.voiceagent.oneplus13.core.AgentEventBus
+ import com.voiceagent.oneplus13.integrations.messenger.models.MessengerPlatform
+@@ -10,6 +11,8 @@
+ import kotlinx.coroutines.cancelChildren
+ import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.delay
++import kotlinx.coroutines.currentCoroutineContext
++import kotlinx.coroutines.ensureActive
+ import kotlinx.coroutines.launch
+ 
+ /**
+@@ -17,22 +20,27 @@
+  * message onto AgentEventBus (so AgentOrchestrator or the lecture module can react
+  * to "read me my messages"), and routes outbound replies to the right client.
+  */
+-class MessengerBridge(
++class MessengerBridge internal constructor(
+     private val telegram: TelegramClient,
+     private val max: MaxClient,
+-    private val whatsApp: WhatsAppClient? = null
++    private val whatsApp: WhatsAppClient?,
++    private val scope: CoroutineScope
+ ) {
+-    private val scope = CoroutineScope(SupervisorJob())
++    constructor(telegram: TelegramClient, max: MaxClient, whatsApp: WhatsAppClient? = null) :
++        this(telegram, max, whatsApp, CoroutineScope(SupervisorJob()))
++
+     private var telegramOffset = 0L
+     @Volatile private var polling = false
+ 
+     private companion object {
++        const val TAG = "VA_TELEGRAM"
+         const val POLL_ERROR_DELAY_MS = 5_000L
+     }
+ 
+     @Synchronized fun startPolling() {
+         if (polling) return
+         polling = true
++        Log.i(TAG, "polling=start")
+         scope.launch { pollTelegramLoop() }
+         scope.launch { pollMaxLoop() }
+     }
+@@ -40,6 +48,7 @@
+     @Synchronized fun stopPolling() {
+         polling = false
+         scope.coroutineContext[Job]?.cancelChildren()
++        Log.i(TAG, "polling=stop")
+     }
+ 
+     private suspend fun pollTelegramLoop() {
+@@ -48,15 +57,31 @@
+             // приложение. Теперь — пауза и повтор (и без горячего цикла при мгновенных ошибках).
+             try {
+                 val (newOffset, msgs) = telegram.pollUpdates(telegramOffset)
++                currentCoroutineContext().ensureActive()
++                msgs.forEach { publishInbound(it) }
++                // Do not acknowledge a batch whose publication was cancelled by stopPolling.
++                // Replaying a partially published batch on restart is safer than losing it.
++                currentCoroutineContext().ensureActive()
+                 telegramOffset = newOffset
+-                msgs.forEach { publishInbound(it) }
++                Log.d(TAG, "poll=ok messages=${msgs.size}")
+                 delay(250) // guard even an upstream that returns immediate empty results
+             } catch (e: CancellationException) {
+                 throw e
+             } catch (e: TelegramPollException) {
+-                delay(maxOf(POLL_ERROR_DELAY_MS, e.retryAfterSeconds * 1000,
+-                    if (e.status in setOf(401, 403, 409)) 60_000L else 0L))
++                val retryMs = maxOf(POLL_ERROR_DELAY_MS, e.retryAfterSeconds * 1000,
++                    if (e.status in setOf(401, 403, 409)) 60_000L else 0L)
++                val reason = when (e.status) {
++                    401 -> "unauthorized"
++                    403 -> "forbidden"
++                    409 -> "webhook_or_other_poller_conflict"
++                    429 -> "rate_limited"
++                    else -> "http_error"
++                }
++                Log.w(TAG, "poll=failed status=${e.status} reason=$reason retry_ms=$retryMs")
++                delay(retryMs)
+             } catch (e: Exception) {
++                // Exception messages/stack traces may contain a bot token or a request URL.
++                Log.w(TAG, "poll=failed reason=transport_or_parse retry_ms=$POLL_ERROR_DELAY_MS")
+                 delay(POLL_ERROR_DELAY_MS)
+             }
+         }
+--- a/app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/TelegramClient.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/TelegramClient.kt
+@@ -1,6 +1,7 @@
+ package com.voiceagent.oneplus13.integrations.messenger
+ 
+ import android.content.Context
++import android.util.Log
+ import com.voiceagent.oneplus13.core.awaitPayload
+ import com.squareup.moshi.JsonClass
+ import com.squareup.moshi.Moshi
+@@ -38,11 +39,19 @@
+     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+     private val base = "https://api.telegram.org/bot$botToken"
+ 
++    init {
++        Log.i("VA_TELEGRAM", "client=created token_configured=${this.botToken.isNotBlank()}")
++    }
++
+     suspend fun sendMessage(chatId: String, text: String) = withContext(Dispatchers.IO) {
+         val json = org.json.JSONObject().put("chat_id", chatId).put("text", text).toString()
+         val body = json.toRequestBody("application/json".toMediaType())
+         val request = Request.Builder().url("$base/sendMessage").post(body).build()
+-        http.newCall(request).awaitPayload().let { it.status in 200..299 && org.json.JSONObject(it.body).optBoolean("ok") }
++        http.newCall(request).awaitPayload().let {
++            val sent = it.status in 200..299 && org.json.JSONObject(it.body).optBoolean("ok")
++            Log.i("VA_TELEGRAM", "send status=${it.status} ok=$sent")
++            sent
++        }
+     }
+ 
+     /** Long-polls getUpdates and returns any new messages as platform-agnostic Msg objects. */
+--- a/app/src/main/java/com/voiceagent/oneplus13/system/Diagnostics.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/system/Diagnostics.kt
+@@ -128,21 +128,22 @@
+     }
+ 
+     private fun checkVoskModel(context: Context): DiagnosticCheck {
+-        // STTEngine распаковывает assets/model-ru-small в filesDir/model при первом успешном запуске.
+-        val unpacked = File(context.filesDir, "model").let { it.exists() && it.list()?.isNotEmpty() == true }
+-        val present = unpacked || hasAssetModel(context)
++        val missing = com.voiceagent.oneplus13.core.VoskModelFiles.missing { relative ->
++            runCatching { context.assets.open("model-ru-small/$relative").use { it.read() != -1 } }.getOrDefault(false)
++        }
++        val cache = context.getExternalFilesDir(null)?.let {
++            com.voiceagent.oneplus13.core.VoskModelFiles.cacheDirectory(it)
++        }
++        val cacheReady = cache != null && com.voiceagent.oneplus13.core.VoskModelFiles.missing(cache).isEmpty()
+         return DiagnosticCheck(
+             "Оффлайн-модель распознавания речи (Vosk)",
+-            if (present) CheckStatus.OK else CheckStatus.FAIL,
+-            if (present) "Найдена" else "Модель не найдена в assets/model-ru-small — без неё голосовой ввод не " +
+-                "заработает вообще, скачай vosk-model-small-ru с alphacephei.com/vosk/models (см. README)",
++            if (missing.isEmpty()) CheckStatus.OK else CheckStatus.FAIL,
++            if (missing.isNotEmpty()) "В APK отсутствуют необходимые файлы модели. Добавьте полную модель в assets/model-ru-small и пересоберите APK."
++            else if (cacheReady) "Ресурсы и распакованные файлы найдены. Инициализация движка проверяется запуском агента."
++            else "Ресурсы в APK найдены; при запуске модель будет распакована в каталог приложения. Дополнительное разрешение на хранилище не требуется.",
+             fixSettingsAction = null
+         )
+     }
+-
+-    private fun hasAssetModel(context: Context): Boolean = runCatching {
+-        context.assets.list("model-ru-small")?.isNotEmpty() == true
+-    }.getOrDefault(false)
+ 
+     private fun checkRootAccess(): DiagnosticCheck {
+         // Только проверяет доступность su — ничего не переключает и не меняет.
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/AgentSiriPanel.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/AgentSiriPanel.kt
+@@ -60,7 +60,8 @@
+     onQuickPrompt: (String) -> Unit = {},
+     dockedMode: Boolean = false,
+     isListening: Boolean = false,
+-    maxWidth: Dp? = null
++    maxWidth: Dp? = null,
++    canSubmit: () -> Boolean = { true }
+ ) {
+     if (dockedMode) {
+         AnimatedVisibility(visible = isVisible, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
+@@ -68,6 +69,7 @@
+                 messages = messages,
+                 quickPrompts = quickPrompts,
+                 onSend = onSend,
++                canSubmit = canSubmit,
+                 onQuickPrompt = onQuickPrompt,
+                 onDismiss = onDismiss,
+                 isListening = isListening,
+@@ -100,6 +102,7 @@
+                     messages = messages,
+                     quickPrompts = quickPrompts,
+                     onSend = onSend,
++                    canSubmit = canSubmit,
+                     onQuickPrompt = onQuickPrompt,
+                     onDismiss = onDismiss,
+                     isListening = isListening,
+@@ -123,7 +126,8 @@
+     onDismiss: () -> Unit,
+     isListening: Boolean,
+     modifier: Modifier = Modifier,
+-    showDragHandle: Boolean = true
++    showDragHandle: Boolean = true,
++    canSubmit: () -> Boolean = { true }
+ ) {
+     val cs = MaterialTheme.colorScheme
+     Column(modifier = modifier.background(cs.surfaceContainerLow)) {
+@@ -185,6 +189,7 @@
+ 
+         Composer(
+             onSend = onSend,
++            canSubmit = canSubmit,
+             listening = isListening,
+             modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)
+         )
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
+@@ -390,7 +390,8 @@
+     modifier: Modifier = Modifier,
+     placeholder: String = "Спросите Ваню",
+     listening: Boolean = false,
+-    onMicClick: (() -> Unit)? = null
++    onMicClick: (() -> Unit)? = null,
++    canSubmit: () -> Boolean = { true }
+ ) {
+     val cs = MaterialTheme.colorScheme
+     var input by remember { mutableStateOf("") }
+@@ -398,10 +399,7 @@
+     val shape = RoundedCornerShape(28.dp)
+ 
+     fun submit() {
+-        if (input.isNotBlank()) {
+-            onSend(input.trim())
+-            input = ""
+-        }
++        if (submitTextIfReady(input, canSubmit, onSend)) input = ""
+     }
+ 
+     Row(
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt
+@@ -89,7 +89,8 @@
+     val onSetOverlayEnabled: (Boolean) -> Unit,
+     val isOverlayAlwaysVisible: () -> Boolean,
+     val onSetOverlayAlwaysVisible: (Boolean) -> Unit,
+-    val onOpenWorkflowWorkshop: () -> Unit
++    val onOpenWorkflowWorkshop: () -> Unit,
++    val canSendText: () -> Boolean = { isAgentRunning }
+ )
+ 
+ private val QUICK_PROMPTS = listOf("Что на экране?", "Что это?", "Что сейчас играет?", "Что нового?", "Заверши лекцию")
+@@ -121,8 +122,14 @@
+                     messages.add(ChatMessage(event.text, isUser = true))
+                     history = historyStore.add(event.text)
+                 }
+-                is AgentEvent.Reply -> messages.add(ChatMessage(event.text, isUser = false))
+-                is AgentEvent.Error -> messages.add(ChatMessage("⚠ ${event.message}", isUser = false))
++                is AgentEvent.Reply -> {
++                    android.util.Log.i("VA_UI", "result=reply_displayed")
++                    messages.add(ChatMessage(event.text, isUser = false))
++                }
++                is AgentEvent.Error -> {
++                    android.util.Log.i("VA_UI", "result=error_displayed")
++                    messages.add(ChatMessage("⚠ ${event.message}", isUser = false))
++                }
+                 is AgentEvent.ProjectReady -> messages.add(
+                     ChatMessage(
+                         text = "Готово — проект «${event.projectName}» собран в zip.",
+@@ -137,11 +144,20 @@
+         }
+     }
+ 
++    val checkReady: () -> Boolean = {
++        val ready = controls.canSendText()
++        if (!ready) {
++            android.util.Log.i("VA_UI", "text=rejected reason=service_not_ready")
++            android.widget.Toast.makeText(context, "Агент ещё не готов. Включите его и дождитесь подключения; текст сохранён в поле.", android.widget.Toast.LENGTH_LONG).show()
++        }
++        ready
++    }
+     val handleSendText: (String) -> Unit = { text ->
+-        // Показываем сразу же — не ждём, пока событие вернётся с шины.
+-        messages.add(ChatMessage(text, isUser = true))
+-        history = historyStore.add(text)
+-        controls.onSendText(text)
++        submitTextIfReady(text, checkReady) { accepted ->
++            messages.add(ChatMessage(accepted, isUser = true))
++            history = historyStore.add(accepted)
++            controls.onSendText(accepted)
++        }
+     }
+     val toggleAgent: () -> Unit = { if (controls.isAgentRunning) controls.onStopAgent() else controls.onStartAgent() }
+     val openSettings = { settingsVisible = true }
+@@ -153,7 +169,7 @@
+             DeviceFormFactor.PHONE -> PhoneLayout(
+                 phase = phase, statusText = statusText, running = controls.isAgentRunning,
+                 messages = messages, history = history,
+-                onSend = handleSendText, onToggleAgent = toggleAgent,
++                onSend = handleSendText, canSubmit = checkReady, onToggleAgent = toggleAgent,
+                 onNewChat = { messages.clear() },
+                 onOpenHistory = { historySheetVisible = true },
+                 onClearHistory = { history = historyStore.clear() },
+@@ -162,7 +178,7 @@
+             DeviceFormFactor.TABLET_OR_DESKTOP -> DesktopLayout(
+                 phase = phase, statusText = statusText, running = controls.isAgentRunning,
+                 messages = messages, history = history,
+-                onSend = handleSendText, onToggleAgent = toggleAgent,
++                onSend = handleSendText, canSubmit = checkReady, onToggleAgent = toggleAgent,
+                 onClearHistory = { history = historyStore.clear() },
+                 onOpenSettings = openSettings
+             )
+@@ -170,7 +186,7 @@
+                 phase = phase, statusText = statusText, running = controls.isAgentRunning,
+                 panelVisible = panelVisible, messages = messages, history = history,
+                 onFabClick = { panelVisible = true }, onDismiss = { panelVisible = false },
+-                onSend = handleSendText, onToggleAgent = toggleAgent,
++                onSend = handleSendText, canSubmit = checkReady, onToggleAgent = toggleAgent,
+                 onClearHistory = { history = historyStore.clear() },
+                 onOpenSettings = openSettings
+             )
+@@ -220,6 +236,7 @@
+     messages: List<ChatMessage>,
+     history: List<HistoryItem>,
+     onSend: (String) -> Unit,
++    canSubmit: () -> Boolean,
+     onToggleAgent: () -> Unit,
+     onNewChat: () -> Unit,
+     onOpenHistory: () -> Unit,
+@@ -253,6 +270,7 @@
+         }
+         Composer(
+             onSend = onSend,
++            canSubmit = canSubmit,
+             listening = phase == AgentPhase.LISTENING,
+             onMicClick = if (!running) onToggleAgent else null,
+             modifier = Modifier
+@@ -271,6 +289,7 @@
+     messages: List<ChatMessage>,
+     history: List<HistoryItem>,
+     onSend: (String) -> Unit,
++    canSubmit: () -> Boolean,
+     onToggleAgent: () -> Unit,
+     onClearHistory: () -> Unit,
+     onOpenSettings: () -> Unit
+@@ -292,6 +311,7 @@
+                 quickPrompts = QUICK_PROMPTS,
+                 onDismiss = {},
+                 onSend = onSend,
++                canSubmit = canSubmit,
+                 onQuickPrompt = onSend,
+                 dockedMode = true,
+                 isListening = phase == AgentPhase.LISTENING
+@@ -315,6 +335,7 @@
+     onFabClick: () -> Unit,
+     onDismiss: () -> Unit,
+     onSend: (String) -> Unit,
++    canSubmit: () -> Boolean,
+     onToggleAgent: () -> Unit,
+     onClearHistory: () -> Unit,
+     onOpenSettings: () -> Unit
+@@ -343,6 +364,7 @@
+                 quickPrompts = QUICK_PROMPTS,
+                 onDismiss = onDismiss,
+                 onSend = onSend,
++                canSubmit = canSubmit,
+                 onQuickPrompt = onSend
+             )
+             Spacer(Modifier.height(14.dp))
+--- /dev/null
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/TextSubmission.kt
+@@ -0,0 +1,9 @@
++package com.voiceagent.oneplus13.ui
++
++/** Keep the draft/history unless the current route can actually accept a command. */
++internal fun submitTextIfReady(text: String, ready: () -> Boolean, send: (String) -> Unit): Boolean {
++    val trimmed = text.trim()
++    if (trimmed.isEmpty() || !ready()) return false
++    send(trimmed)
++    return true
++}
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt
+@@ -52,7 +52,8 @@
+     onSend: (String) -> Unit,
+     onQuickPrompt: (String) -> Unit,
+     modifier: Modifier = Modifier,
+-    width: Dp = 340.dp
++    width: Dp = 340.dp,
++    canSubmit: () -> Boolean = { true }
+ ) {
+     val cs = MaterialTheme.colorScheme
+     AnimatedVisibility(
+@@ -101,6 +102,7 @@
+ 
+                 Composer(
+                     onSend = onSend,
++                    canSubmit = canSubmit,
+                     listening = isListening,
+                     modifier = Modifier.padding(horizontal = 12.dp)
+                 )
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/integrations/messenger/MessengerBridgeTest.kt
+@@ -0,0 +1,156 @@
++package com.voiceagent.oneplus13.integrations.messenger
++
++import android.util.Log
++import com.voiceagent.oneplus13.core.AgentEventBus
++import com.voiceagent.oneplus13.integrations.messenger.models.MessengerPlatform
++import com.voiceagent.oneplus13.integrations.messenger.models.Msg
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.SupervisorJob
++import kotlinx.coroutines.awaitCancellation
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.test.TestScope
++import kotlinx.coroutines.test.UnconfinedTestDispatcher
++import kotlinx.coroutines.test.advanceTimeBy
++import kotlinx.coroutines.test.runCurrent
++import kotlinx.coroutines.test.runTest
++import org.junit.After
++import org.junit.Assert.assertEquals
++import org.junit.Before
++import org.junit.Test
++import org.mockito.MockedStatic
++import org.mockito.Mockito.*
++import java.io.IOException
++
++@OptIn(ExperimentalCoroutinesApi::class)
++class MessengerBridgeTest {
++    private lateinit var logs: MockedStatic<Log>
++    private lateinit var telegram: TelegramClient
++    private lateinit var max: MaxClient
++
++    @Before fun setup() {
++        logs = mockStatic(Log::class.java)
++        telegram = mock(TelegramClient::class.java)
++        max = mock(MaxClient::class.java)
++    }
++
++    @After fun cleanup() { logs.close() }
++
++    private fun TestScope.bridge() = MessengerBridge(
++        telegram, max, null,
++        CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext[Job]))
++    )
++
++    @Test fun restartDoesNotAcknowledgeBatchWhosePublicationWasCancelled() = runTest {
++        val offsets = mutableListOf<Long>()
++        val batch = List(40) { Msg(MessengerPlatform.TELEGRAM, "chat", "sender", "message $it") }
++        doAnswer { invocation ->
++            offsets += invocation.getArgument<Long>(0)
++            40L to batch
++        }.`when`(telegram).pollUpdates(anyLong())
++        `when`(max.pollUpdates()).thenReturn(emptyList())
++
++        // A slow subscriber fills the event bus buffer and suspends batch publication.
++        var delivered = 0
++        val subscriber = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
++            AgentEventBus.events.collect {
++                delivered++
++                awaitCancellation()
++            }
++        }
++        val bridge = bridge()
++        try {
++            bridge.startPolling()
++            runCurrent()
++            assertEquals(1, delivered)
++            assertEquals(listOf(0L), offsets)
++
++            bridge.stopPolling()
++            subscriber.cancel()
++            runCurrent()
++            bridge.startPolling()
++            runCurrent()
++            assertEquals(listOf(0L, 0L), offsets)
++        } finally {
++            bridge.stopPolling()
++            subscriber.cancel()
++        }
++    }
++
++    @Test fun successfulBatchAdvancesOffsetAndRepeatedStartKeepsOnePoller() = runTest {
++        val offsets = mutableListOf<Long>()
++        doAnswer { invocation ->
++            offsets += invocation.getArgument<Long>(0)
++            8L to emptyList<Msg>()
++        }.`when`(telegram).pollUpdates(anyLong())
++        `when`(max.pollUpdates()).thenReturn(emptyList())
++        val bridge = bridge()
++        try {
++            bridge.startPolling()
++            bridge.startPolling()
++            runCurrent()
++            assertEquals(listOf(0L), offsets)
++            advanceTimeBy(250)
++            runCurrent()
++            assertEquals(listOf(0L, 8L), offsets)
++            bridge.stopPolling()
++            advanceTimeBy(60_000)
++            runCurrent()
++            assertEquals(listOf(0L, 8L), offsets)
++        } finally { bridge.stopPolling() }
++    }
++
++    @Test fun conflictRetriesAfterOneMinuteAndLogsOnlySafeMetadata() = runTest {
++        doAnswer { throw TelegramPollException(409, 0) }.`when`(telegram).pollUpdates(anyLong())
++        `when`(max.pollUpdates()).thenReturn(emptyList())
++        val bridge = bridge()
++        try {
++            bridge.startPolling()
++            runCurrent()
++            verify(telegram, times(1)).pollUpdates(0L)
++            logs.verify {
++                Log.w("VA_TELEGRAM", "poll=failed status=409 reason=webhook_or_other_poller_conflict retry_ms=60000")
++            }
++            advanceTimeBy(59_999)
++            runCurrent()
++            verify(telegram, times(1)).pollUpdates(0L)
++            advanceTimeBy(1)
++            runCurrent()
++            verify(telegram, times(2)).pollUpdates(0L)
++        } finally { bridge.stopPolling() }
++    }
++
++    @Test fun transportFailureDoesNotLogExceptionContainingCredentials() = runTest {
++        doAnswer { throw IOException("https://api.telegram.org/botSYNTHETIC/getUpdates") }.`when`(telegram).pollUpdates(anyLong())
++        `when`(max.pollUpdates()).thenReturn(emptyList())
++        val bridge = bridge()
++        try {
++            bridge.startPolling()
++            runCurrent()
++            logs.verify { Log.i("VA_TELEGRAM", "polling=start") }
++            logs.verify { Log.w("VA_TELEGRAM", "poll=failed reason=transport_or_parse retry_ms=5000") }
++            logs.verifyNoMoreInteractions()
++            advanceTimeBy(4_999)
++            runCurrent()
++            verify(telegram, times(1)).pollUpdates(0L)
++            advanceTimeBy(1)
++            runCurrent()
++            verify(telegram, times(2)).pollUpdates(0L)
++        } finally { bridge.stopPolling() }
++    }
++    @Test fun startMessageIsAnInboundEventNotAnAutomaticBotReply() = runTest {
++        val events = mutableListOf<com.voiceagent.oneplus13.core.AgentEvent>()
++        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
++            AgentEventBus.events.collect { events += it }
++        }
++        `when`(telegram.pollUpdates(anyLong())).thenReturn(1L to listOf(Msg(MessengerPlatform.TELEGRAM, "chat", "sender", "/start")))
++        `when`(max.pollUpdates()).thenReturn(emptyList())
++        val bridge = bridge()
++        try {
++            bridge.startPolling(); runCurrent()
++            assertEquals("messenger_received", (events.single() as com.voiceagent.oneplus13.core.AgentEvent.ActionRequested).action)
++            assertEquals(0, mockingDetails(telegram).invocations.count { it.method.name == "sendMessage" })
++        } finally { bridge.stopPolling(); collector.cancel() }
++    }
++}
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/ui/TextSubmissionTest.kt
+@@ -0,0 +1,26 @@
++package com.voiceagent.oneplus13.ui
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class TextSubmissionTest {
++    @Test fun disconnectedRouteKeepsDraftAndDoesNotSend() {
++        var draft = "  вопрос  "; var calls = 0
++        if (submitTextIfReady(draft, { false }) { calls++ }) draft = ""
++        assertEquals("  вопрос  ", draft); assertEquals(0, calls)
++    }
++    @Test fun connectedRouteSendsOnceAndAllowsDraftClear() {
++        var draft = "  вопрос  "; val sent = mutableListOf<String>()
++        if (submitTextIfReady(draft, { true }, sent::add)) draft = ""
++        assertEquals(listOf("вопрос"), sent); assertEquals("", draft)
++    }
++    @Test fun readinessIsCheckedAtSubmissionNotCompositionTime() {
++        var ready = false; val sent = mutableListOf<String>()
++        assertFalse(submitTextIfReady("вопрос", { ready }, sent::add))
++        ready = true
++        assertTrue(submitTextIfReady("вопрос", { ready }, sent::add)); assertEquals(1, sent.size)
++    }
++    @Test fun blankInputIsNotDispatched() {
++        assertFalse(submitTextIfReady("  ", { true }) { error("must not send") })
++    }
++}
+--- a/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/STTEngine.kt
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/STTEngine.kt
+@@ -17,7 +17,6 @@
+ import org.vosk.Recognizer
+ import org.vosk.android.RecognitionListener
+ import org.vosk.android.SpeechService
+-import org.vosk.android.StorageService
+ import java.util.concurrent.atomic.AtomicBoolean
+ 
+ /** A model belongs to this engine; AudioRecord and Recognizer belong to one collected flow. */
+@@ -29,7 +28,7 @@
+     private val waiters = mutableListOf<Pair<(Model) -> Unit, (Throwable) -> Unit>>()
+     private var releaseCurrent: (() -> Unit)? = null
+ 
+-    fun ensureModel(modelAssetPath: String = "model-ru-small", onReady: (Model) -> Unit, onError: (Throwable) -> Unit) {
++    fun ensureModel(modelAssetPath: String = VoskModelFiles.ASSET_PATH, onReady: (Model) -> Unit, onError: (Throwable) -> Unit) {
+         synchronized(stateLock) {
+             if (closed) { onError(IllegalStateException("STT engine is closed")); return }
+             model?.let { onReady(it); return }
+@@ -37,10 +36,10 @@
+             if (loading) return
+             loading = true
+         }
+-        StorageService.unpack(context, modelAssetPath, "model", { loaded ->
++        VoskModelLoader.load(context.applicationContext, modelAssetPath, { loaded ->
+             val callbacks = synchronized(stateLock) {
+                 loading = false
+-                if (closed) { loaded.close(); waiters.clear(); return@unpack }
++                if (closed) { loaded.close(); waiters.clear(); return@load }
+                 model = loaded
+                 waiters.toList().also { waiters.clear() }
+             }
+--- /dev/null
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoskModelFiles.kt
+@@ -0,0 +1,25 @@
++package com.voiceagent.oneplus13.core
++
++import java.io.File
++
++/** Structural preflight only; successful native Model initialization remains a separate check. */
++object VoskModelFiles {
++    const val ASSET_PATH = "model-ru-small"
++    const val STORAGE_PATH = "model"
++    fun missing(hasNonEmptyFile: (String) -> Boolean): List<String> = buildList {
++        for (name in listOf("uuid", "am/final.mdl", "conf/mfcc.conf")) if (!hasNonEmptyFile(name)) add(name)
++        if (!hasNonEmptyFile("graph/HCLG.fst") &&
++            !(hasNonEmptyFile("graph/HCLr.fst") && hasNonEmptyFile("graph/Gr.fst"))) add("graph/FST")
++    }
++    fun missing(directory: File): List<String> = missing { File(directory, it).let { f -> f.isFile && f.length() > 0 } }
++    fun cacheDirectory(externalFilesDir: File, assetPath: String = ASSET_PATH): File =
++        File(File(externalFilesDir, STORAGE_PATH), assetPath)
++
++    /** StorageService.sync trusts an equal uuid without checking the actual model files. */
++    fun invalidateIncompleteCache(directory: File): Boolean {
++        val marker = File(directory, "uuid")
++        if (!marker.exists() || missing(directory).isEmpty()) return false
++        check(marker.delete()) { "Cannot invalidate incomplete STT cache" }
++        return true
++    }
++}
+--- /dev/null
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoskModelLoader.kt
+@@ -0,0 +1,47 @@
++package com.voiceagent.oneplus13.core
++
++import android.content.Context
++import android.os.Handler
++import android.os.Looper
++import android.util.Log
++import org.vosk.Model
++import org.vosk.android.StorageService
++import java.io.IOException
++import java.util.concurrent.Executors
++
++/** Uses the existing Vosk sync implementation/path. Serializes copies by the two STT engines.
++ * Unlike StorageService.unpack, reports runtime/native-link failures as well as IOExceptions.
++ */
++internal object VoskModelLoader {
++    private val worker = Executors.newSingleThreadExecutor { task -> Thread(task, "VoskModelLoader").apply { isDaemon = true } }
++    fun load(context: Context, assetPath: String, ready: (Model) -> Unit, failed: (Throwable) -> Unit) {
++        val main = Handler(Looper.getMainLooper())
++        worker.execute {
++            var stage = "assets"
++            val result = try {
++                val missing = VoskModelFiles.missing { relative ->
++                    try { context.assets.open("$assetPath/$relative").use { it.read() != -1 } }
++                    catch (_: IOException) { false }
++                }
++                if (missing.isNotEmpty()) throw IOException("STT model assets incomplete")
++                stage = "storage"
++                val external = context.getExternalFilesDir(null) ?: throw IOException("STT storage unavailable")
++                if (VoskModelFiles.invalidateIncompleteCache(VoskModelFiles.cacheDirectory(external, assetPath)))
++                    Log.i("VA_STT", "cache=incomplete recopy=true")
++                val path = StorageService.sync(context, assetPath, VoskModelFiles.STORAGE_PATH)
++                stage = "native"
++                Model(path)
++            } catch (e: Exception) {
++                Log.w("VA_STT", "model=failed stage=$stage kind=exception")
++                main.post { failed(e) }
++                return@execute
++            } catch (e: LinkageError) {
++                Log.w("VA_STT", "model=failed stage=$stage kind=native_link")
++                main.post { failed(e) }
++                return@execute
++            }
++            Log.i("VA_STT", "model=ready")
++            if (!main.post { ready(result) }) result.close()
++        }
++    }
++}
+--- /dev/null
++++ b/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/VoskModelFilesTest.kt
+@@ -0,0 +1,32 @@
++package com.voiceagent.oneplus13.core
++
++import org.junit.Assert.*
++import org.junit.Rule
++import org.junit.Test
++import org.junit.rules.TemporaryFolder
++import java.io.File
++
++class VoskModelFilesTest {
++    @get:Rule val folder = TemporaryFolder()
++    private fun files(vararg names: String) { names.forEach { File(folder.root,it).apply { parentFile?.mkdirs(); writeText("fixture") } } }
++    @Test fun uuidAloneIsNotAModel() { files("uuid"); assertTrue(VoskModelFiles.missing(folder.root).isNotEmpty()) }
++    @Test fun acceptsSupportedGraphLayoutsButNotOneHalfOfSplitGraph() {
++        files("uuid","am/final.mdl","conf/mfcc.conf","graph/HCLr.fst")
++        assertEquals(listOf("graph/FST"),VoskModelFiles.missing(folder.root))
++        files("graph/Gr.fst"); assertTrue(VoskModelFiles.missing(folder.root).isEmpty())
++        File(folder.root,"graph/Gr.fst").delete(); files("graph/HCLG.fst")
++        assertTrue(VoskModelFiles.missing(folder.root).isEmpty())
++    }
++    @Test fun incompleteStampedCacheForcesRecopyWithoutDeletingUnrelatedFiles() {
++        files("uuid","keep.txt"); assertTrue(VoskModelFiles.invalidateIncompleteCache(folder.root))
++        assertFalse(File(folder.root,"uuid").exists()); assertTrue(File(folder.root,"keep.txt").exists())
++        assertFalse(VoskModelFiles.invalidateIncompleteCache(folder.root))
++    }
++    @Test fun completeCacheIsNotInvalidated() {
++        files("uuid","am/final.mdl","conf/mfcc.conf","graph/HCLG.fst")
++        assertFalse(VoskModelFiles.invalidateIncompleteCache(folder.root)); assertTrue(File(folder.root,"uuid").exists())
++    }
++    @Test fun pathMatchesVoskStorageService03545() {
++        assertEquals(File(folder.root,"model/model-ru-small"),VoskModelFiles.cacheDirectory(folder.root))
++    }
++}
+--- a/scripts/download_vosk_model.sh
++++ b/scripts/download_vosk_model.sh
+@@ -1,12 +1,34 @@
+ #!/bin/sh
+-# Linux/macOS/Termux: скачивает модель Vosk в app/src/main/assets/model-ru-small и создаёт uuid.
+-set -e
++# Download the existing Vosk model. Do not replace an installed copy unless the new archive validates.
++set -eu
+ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ DEST="$ROOT/app/src/main/assets/model-ru-small"
+ TMP="$(mktemp -d)"
+-curl -L -o "$TMP/m.zip" https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
++trap 'test -z "${STAGED:-}" || rm -rf "$STAGED"; rm -rf "$TMP"' EXIT
++trap 'exit 1' HUP INT TERM
++curl --fail --show-error --location --connect-timeout 20 --max-time 600 -o "$TMP/m.zip" https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
++unzip -tq "$TMP/m.zip"
+ unzip -q "$TMP/m.zip" -d "$TMP"
+-rm -rf "$DEST"; mkdir -p "$(dirname "$DEST")"
+-mv "$TMP"/vosk-model-small-ru-* "$DEST"
+-cat /proc/sys/kernel/random/uuid > "$DEST/uuid" 2>/dev/null || date +%s > "$DEST/uuid"
++MODEL="$TMP/vosk-model-small-ru-0.22"
++for FILE in am/final.mdl conf/mfcc.conf; do
++    test -s "$MODEL/$FILE" || { echo "Incomplete Vosk model archive" >&2; exit 1; }
++done
++if ! test -s "$MODEL/graph/HCLG.fst"; then
++    test -s "$MODEL/graph/HCLr.fst" && test -s "$MODEL/graph/Gr.fst" || { echo "Missing Vosk decoding graph" >&2; exit 1; }
++fi
++# New marker forces the existing StorageService.sync to refresh previously unpacked files.
++(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s) > "$MODEL/uuid"
++mkdir -p "$(dirname "$DEST")"
++# Keep the previous model until the validated copy is ready on the destination filesystem.
++STAGED="$(mktemp -d "$(dirname "$DEST")/.model-stage.XXXXXX")"
++if ! cp -R "$MODEL/." "$STAGED/"; then rm -rf "$STAGED"; exit 1; fi
++if test -e "$DEST.previous"; then rm -rf "$STAGED"; echo "Resolve existing model-ru-small.previous before replacing the model" >&2; exit 1; fi
++if test -d "$DEST"; then mv "$DEST" "$DEST.previous"; fi
++if mv "$STAGED" "$DEST"; then
++    rm -rf "$DEST.previous"
++else
++    if test -d "$DEST.previous"; then mv "$DEST.previous" "$DEST"; fi
++    rm -rf "$STAGED"
++    exit 1
++fi
+ echo "Готово: $DEST"
+--- /dev/null
++++ b/scripts/tests/test_vosk_download.py
+@@ -0,0 +1,63 @@
++"""Filesystem/download-failure tests; fixtures are NOT usable speech models. No network calls."""
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import tempfile
++import unittest
++import zipfile
++
++SCRIPT = Path(__file__).resolve().parents[1] / 'download_vosk_model.sh'
++
++class ModelDownloadTest(unittest.TestCase):
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.addCleanup(self.temp.cleanup)
++        self.root = Path(self.temp.name)
++        (self.root / 'scripts').mkdir()
++        self.script = self.root / 'scripts/download_vosk_model.sh'
++        shutil.copyfile(SCRIPT, self.script)
++        self.model = self.root / 'app/src/main/assets/model-ru-small'
++        self.model.mkdir(parents=True)
++        (self.model / 'old-marker').write_text('existing model')
++        self.bin = self.root / 'bin'
++        self.bin.mkdir()
++        fake = self.bin / 'curl'
++        fake.write_text('''#!/usr/bin/env python3
++import os,sys,shutil
++if os.environ.get("SIMULATE_HTTP_ERROR") == "1": sys.exit(22)
++shutil.copyfile(os.environ["FIXTURE_ARCHIVE"],sys.argv[sys.argv.index("-o")+1])
++''')
++        fake.chmod(0o700)
++        self.env = os.environ.copy()
++        self.env['PATH'] = str(self.bin) + os.pathsep + self.env['PATH']
++        self.fixture = self.root / 'fixture.zip'
++        self.env['FIXTURE_ARCHIVE'] = str(self.fixture)
++
++    def run_script(self):
++        return subprocess.run(['sh', str(self.script)], env=self.env, capture_output=True, text=True, timeout=10)
++
++    def test_http_failure_preserves_existing_model(self):
++        self.env['SIMULATE_HTTP_ERROR'] = '1'
++        self.assertEqual(22, self.run_script().returncode)
++        self.assertEqual('existing model', (self.model / 'old-marker').read_text())
++
++    def test_incomplete_archive_preserves_existing_model(self):
++        with zipfile.ZipFile(self.fixture, 'w') as z:
++            z.writestr('vosk-model-small-ru-0.22/uuid', 'not enough')
++        self.assertNotEqual(0, self.run_script().returncode)
++        self.assertTrue((self.model / 'old-marker').exists())
++
++    def test_structurally_complete_fixture_installs_without_extra_nesting(self):
++        with zipfile.ZipFile(self.fixture, 'w') as z:
++            for file in ['am/final.mdl', 'conf/mfcc.conf', 'graph/HCLr.fst', 'graph/Gr.fst']:
++                z.writestr('vosk-model-small-ru-0.22/' + file, 'synthetic fixture')
++        result = self.run_script()
++        self.assertEqual(0, result.returncode, result.stderr)
++        self.assertTrue((self.model / 'am/final.mdl').is_file())
++        self.assertTrue((self.model / 'uuid').read_text().strip())
++        self.assertFalse((self.model / 'old-marker').exists())
++        self.assertFalse(list(self.model.parent.glob('.model-stage.*')))
++
++if __name__ == '__main__':
++    unittest.main()

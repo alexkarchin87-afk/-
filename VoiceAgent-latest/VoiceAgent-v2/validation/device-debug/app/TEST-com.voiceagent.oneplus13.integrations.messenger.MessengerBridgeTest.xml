@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.integrations.messenger.MessengerBridgeTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-24T17:09:20" hostname="ac7b89ae9c6b" time="0.085">
+  <properties/>
+  <testcase name="conflictRetriesAfterOneMinuteAndLogsOnlySafeMetadata" classname="com.voiceagent.oneplus13.integrations.messenger.MessengerBridgeTest" time="0.059"/>
+  <testcase name="startMessageIsAnInboundEventNotAnAutomaticBotReply" classname="com.voiceagent.oneplus13.integrations.messenger.MessengerBridgeTest" time="0.007"/>
+  <testcase name="transportFailureDoesNotLogExceptionContainingCredentials" classname="com.voiceagent.oneplus13.integrations.messenger.MessengerBridgeTest" time="0.008"/>
+  <testcase name="restartDoesNotAcknowledgeBatchWhosePublicationWasCancelled" classname="com.voiceagent.oneplus13.integrations.messenger.MessengerBridgeTest" time="0.007"/>
+  <testcase name="successfulBatchAdvancesOffsetAndRepeatedStartKeepsOnePoller" classname="com.voiceagent.oneplus13.integrations.messenger.MessengerBridgeTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

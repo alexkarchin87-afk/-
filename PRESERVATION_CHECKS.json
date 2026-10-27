@@ -1,0 +1,16 @@
+{
+  "VanyaBridge": {
+    "files_preserved_byte_for_byte": 64,
+    "source_zip_sha256": "6d078311328746f2a7edb62eb2f0ec826e36a5a70063fe2d4b9f2fb452cd88f7"
+  },
+  "VoiceAgent-latest": {
+    "files_preserved_byte_for_byte": 407,
+    "source_zip_sha256": "4f264678f476763c6ef98616dd0508a65f7a274a44b84c189f7a0034cd3ffc51"
+  },
+  "windows_exe": {
+    "format": "PE32+ Windows x86-64 GUI",
+    "sha256": "c8280ad8d7ea33efb705bba1ffcf8db00ecdf4b57fbce788761c590949d55401",
+    "native_windows_tested": false,
+    "wine_gui_opened": true
+  }
+}

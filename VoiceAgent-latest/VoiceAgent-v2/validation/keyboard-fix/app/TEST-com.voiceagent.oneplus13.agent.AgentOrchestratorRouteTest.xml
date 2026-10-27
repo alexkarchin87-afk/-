@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-26T05:06:36" hostname="ac7b89ae9c6b" time="2.405">
+  <properties/>
+  <testcase name="modelExampleIsSpokenWithoutExecutingOrProposing" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="2.13"/>
+  <testcase name="closedAgentDropsLateScreenDescription" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.069"/>
+  <testcase name="wrongSourceCannotConfirmVoiceAction" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.026"/>
+  <testcase name="lateReplyAfterCancellationCannotSpeakOrOfferAction" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.01"/>
+  <testcase name="cancelledActionDropsLateScreenIdentification" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.012"/>
+  <testcase name="validModelActionIsOnlyExecutedAfterFreshConfirmation" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.01"/>
+  <testcase name="offlineFailureDoesNotPoisonNextCommand" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.014"/>
+  <testcase name="offlineLocalRequestRequiresConfirmationAndExecutesOnce" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.009"/>
+  <testcase name="closedAgentDoesNotSpeakLateTransportFailure" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.017"/>
+  <testcase name="activeAgentStillSavesAndSpeaksNotes" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.037"/>
+  <testcase name="ttsFailureDoesNotLeavePendingConfirmation" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.009"/>
+  <testcase name="closedAgentDoesNotSaveLateGeneratedProject" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.015"/>
+  <testcase name="closeRejectsLateReplyEvenFromUncooperativeTransport" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.009"/>
+  <testcase name="closedAgentDoesNotSaveLateNotes" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.009"/>
+  <testcase name="operationTimeoutReturnsToListeningCallerAndAllowsNextCommand" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.01"/>
+  <testcase name="configuredWorkflowRetainsPriorityOverLocalTelegramShortcut" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.008"/>
+  <testcase name="failedLaunchIsReportedWithoutFalseSuccess" classname="com.voiceagent.oneplus13.agent.AgentOrchestratorRouteTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

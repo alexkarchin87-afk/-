@@ -1,0 +1,23 @@
+Изменения исходников относительно VoiceAgent-v2-ONEPLUS13.zip (20 файлов):
+app/build.gradle.kts
+app/src/main/java/com/voiceagent/oneplus13/MainActivity.kt
+app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
+app/src/main/java/com/voiceagent/oneplus13/integrations/bot/TelegramBotService.kt
+app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/MessengerBridge.kt
+app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/TelegramClient.kt
+app/src/main/java/com/voiceagent/oneplus13/system/Diagnostics.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/AgentSiriPanel.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/TextSubmission.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt
+app/src/test/java/com/voiceagent/oneplus13/integrations/messenger/MessengerBridgeTest.kt
+app/src/test/java/com/voiceagent/oneplus13/ui/TextSubmissionTest.kt
+core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/STTEngine.kt
+core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoskModelFiles.kt
+core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoskModelLoader.kt
+core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/VoskModelFilesTest.kt
+scripts/download_vosk_model.sh
+scripts/tests/test_vosk_download.py
+
+Документация: FIX_REPORT.md, TEST_RESULTS.md, DEVICE_DIAGNOSTICS.md; архив прежних отчётов validation/baseline-2026-10-23; доказательства validation/device-debug.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.core.WakeCommandTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-24T11:40:34" hostname="ac7b89ae9c6b" time="0.004">
+  <properties/>
+  <testcase name="continuousPhrasePreservesWholeCommand" classname="com.voiceagent.oneplus13.core.WakeCommandTest" time="0.003"/>
+  <testcase name="caseAndWhitespaceDoNotLoseTail" classname="com.voiceagent.oneplus13.core.WakeCommandTest" time="0.001"/>
+  <testcase name="wakeAloneAndWakeWithPauseAreDistinctFromUnrelatedSpeech" classname="com.voiceagent.oneplus13.core.WakeCommandTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

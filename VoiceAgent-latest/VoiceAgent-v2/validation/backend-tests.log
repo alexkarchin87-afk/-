@@ -1,0 +1,19 @@
+test_authentication_required (test_server.WorkerTests.test_authentication_required) ... ok
+test_body_size_limit (test_server.WorkerTests.test_body_size_limit) ... ok
+test_clean_eof_is_not_success (test_server.WorkerTests.test_clean_eof_is_not_success) ... ok
+test_health (test_server.WorkerTests.test_health) ... ok
+test_malformed_event_is_not_success (test_server.WorkerTests.test_malformed_event_is_not_success) ... ok
+test_missing_and_default_secret_refuse_startup (test_server.WorkerTests.test_missing_and_default_secret_refuse_startup) ... ok
+test_model_must_be_configured (test_server.WorkerTests.test_model_must_be_configured) ... ok
+test_no_fabricated_job_success (test_server.WorkerTests.test_no_fabricated_job_success) ... ok
+test_parameter_size_limit (test_server.WorkerTests.test_parameter_size_limit) ... ok
+test_queue_is_bounded (test_server.WorkerTests.test_queue_is_bounded) ... ok
+test_retention_is_bounded (test_server.WorkerTests.test_retention_is_bounded) ... ok
+test_sse_success_requires_done (test_server.WorkerTests.test_sse_success_requires_done) ... ok
+test_stream_capacity_is_bounded (test_server.WorkerTests.test_stream_capacity_is_bounded) ... ok
+test_upstream_error_does_not_leak_body (test_server.WorkerTests.test_upstream_error_does_not_leak_body) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.922s
+
+OK

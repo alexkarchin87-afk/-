@@ -1,0 +1,60 @@
+{
+  "base_archive": "VoiceAgent-v2-PROJECT-FOR-APK.zip",
+  "baseline_sha256": "5a76a7d36bcfebf52c178429ad03b79bb120d3f8cdcd99e6c88b87938ef419b2",
+  "changed_code_config_test_files": 9,
+  "baseline_files_removed": 0,
+  "protected_files_byte_identical": 32,
+  "protected_paths": [
+    "app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayBubbleController.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayLifecycleOwner.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayPosition.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/AdaptiveLayout.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/AgentSiriPanel.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/AttachmentChip.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/CommandHistory.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/FloatingSparkButton.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/SettingsComponents.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/SettingsHub.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/SparkIcons.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/TextSubmission.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/UiPreferences.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/VaIcons.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/theme/Color.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/theme/Theme.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/theme/Type.kt",
+    "app/src/main/java/com/voiceagent/oneplus13/ui/workflow/WorkflowEditorActivity.kt",
+    "app/src/test/java/com/voiceagent/oneplus13/overlay/OverlayPositionTest.kt",
+    "app/src/test/java/com/voiceagent/oneplus13/ui/TextSubmissionTest.kt",
+    "backend/.env.example",
+    "backend/Dockerfile",
+    "backend/docker-compose.yml",
+    "backend/requirements.txt",
+    "backend/server.py",
+    "backend/tests/test_server.py",
+    "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/LLMClient.kt",
+    "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/STTEngine.kt",
+    "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/TTSEngine.kt"
+  ],
+  "patch_apply_and_byte_compare": "PASS",
+  "jvm_tests": {
+    "app": {
+      "tests": 114,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/ai-engines": {
+      "tests": 27,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "powershell_tests": "NOT RUN: runtime unavailable",
+  "new_apk": false,
+  "model_included": false,
+  "zip_crc": "checked after writing"
+}

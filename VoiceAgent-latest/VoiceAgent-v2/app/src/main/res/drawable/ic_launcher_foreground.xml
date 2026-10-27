@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 4-лучевая искра в стиле Gemini (24-юнитовый путь, масштаб 2.3, центр в (54,54)) -->
+    <group
+        android:scaleX="2.3"
+        android:scaleY="2.3"
+        android:translateX="26.4"
+        android:translateY="26.4">
+        <path android:pathData="M12,2 Q13.6,10.4 22,12 Q13.6,13.6 12,22 Q10.4,13.6 2,12 Q10.4,10.4 12,2 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="2"
+                    android:startY="2"
+                    android:endX="22"
+                    android:endY="22">
+                    <item android:offset="0" android:color="#FFFFFFFF" />
+                    <item android:offset="1" android:color="#FF8E8E93" />
+                </gradient>
+            </aapt:attr>
+        </path>
+    </group>
+</vector>

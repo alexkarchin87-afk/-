@@ -1,0 +1,20 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+backend/.env
+*.apk
+/.kotlin
+__pycache__/
+app/src/main/assets/model-*/
+
+# Local model installer recovery files (never APK assets).
+/.model-backups/
+/.model-stage-*/
+/.vosk-install.lock

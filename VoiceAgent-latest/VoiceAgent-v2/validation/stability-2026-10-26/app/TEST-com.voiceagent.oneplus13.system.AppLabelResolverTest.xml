@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.system.AppLabelResolverTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T04:40:38" hostname="ac7b89ae9c6b" time="0.001">
+  <properties/>
+  <testcase name="exactLabelWinsButAmbiguousPartialDoesNotLaunchRandomApp" classname="com.voiceagent.oneplus13.system.AppLabelResolverTest" time="0.001"/>
+  <testcase name="duplicateActivitiesInOnePackageAreNotAmbiguous" classname="com.voiceagent.oneplus13.system.AppLabelResolverTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

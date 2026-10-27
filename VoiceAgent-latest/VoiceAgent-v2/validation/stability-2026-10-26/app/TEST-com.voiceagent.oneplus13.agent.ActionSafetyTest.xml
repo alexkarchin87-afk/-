@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.agent.ActionSafetyTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-26T04:40:37" hostname="ac7b89ae9c6b" time="0.003">
+  <properties/>
+  <testcase name="confirmationIsBoundToSourceAndRequestAndSingleUse" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.0"/>
+  <testcase name="blocksNonWebUrls" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.001"/>
+  <testcase name="validatesKnownParamsAndTypes" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.0"/>
+  <testcase name="lectureRetryAcceptsNoArbitraryFileOrSession" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.0"/>
+  <testcase name="affirmativeMustBeStandalone" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.0"/>
+  <testcase name="expiredAndClearedConfirmationsCannotExecute" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.0"/>
+  <testcase name="examplesAndCodeFencesAreNotCommands" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.001"/>
+  <testcase name="internalSecretActionIsNotAProposal" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.0"/>
+  <testcase name="queuedYesBeforeQuestionCannotAuthorizeFutureAction" classname="com.voiceagent.oneplus13.agent.ActionSafetyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

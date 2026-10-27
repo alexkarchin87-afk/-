@@ -1,0 +1,68 @@
+..........................F.s................                            [100%]
+================================== FAILURES ===================================
+_____________________________ test_symlink_escape _____________________________
+
+tmp_path = WindowsPath('C:/users/root/AppData/Local/Temp/pytest-of-root/pytest-0/test_symlink_escape0')
+
+    def test_symlink_escape(tmp_path):
+        root = tmp_path / 'root'; root.mkdir()
+        outside = tmp_path / 'outside.txt'; outside.write_text('private')
+        try:
+            (root / 'link.txt').symlink_to(outside)
+        except OSError:
+            if os.name == 'nt': pytest.skip('Creating symlinks requires Windows Developer Mode or privilege')
+            raise
+>       with pytest.raises(ValueError): safe_file(root, 'link.txt')
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_backend.py:280: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+backend\security\paths.py:20: in safe_file
+    info = current.lstat()
+           ^^^^^^^^^^^^^^^
+..\python\Lib\pathlib.py:847: in lstat
+    return self.stat(follow_symlinks=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('C:/users/root/AppData/Local/Temp/pytest-of-root/pytest-0/test_symlink_escape0/root/link.txt')
+
+    def stat(self, *, follow_symlinks=True):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return os.stat(self, follow_symlinks=follow_symlinks)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [WinError 2] File not found: 'C:\\users\\root\\AppData\\Local\\Temp\\pytest-of-root\\pytest-0\\test_symlink_escape0\\root\\link.txt'
+
+..\python\Lib\pathlib.py:840: FileNotFoundError
+============================== warnings summary ===============================
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+  Z:\opt\python\Lib\site-packages\websockets\legacy\__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+  Z:\opt\python\Lib\site-packages\uvicorn\protocols\websockets\websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated
+    from websockets.server import WebSocketServerProtocol
+
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+  Z:\opt\python\Lib\site-packages\websockets\legacy\server.py:1178: DeprecationWarning: remove second argument of ws_handler
+    warnings.warn("remove second argument of ws_handler", DeprecationWarning)
+
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+  Z:\opt\python\Lib\site-packages\websockets\exceptions.py:125: DeprecationWarning: ConnectionClosed.code is deprecated; use Protocol.close_code or ConnectionClosed.rcvd.code
+    warnings.warn(  # deprecated in 13.1 - 2024-09-21
+
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+tests/test_tls_integration.py::test_real_tls_pair_task_reconnect_revoke
+  Z:\opt\python\Lib\site-packages\websockets\exceptions.py:136: DeprecationWarning: ConnectionClosed.reason is deprecated; use Protocol.close_reason or ConnectionClosed.rcvd.reason
+    warnings.warn(  # deprecated in 13.1 - 2024-09-21
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---- generated xml file: Z:\opt\project\validation\windows-wine-tests.xml -----
+=========================== short test summary info ===========================
+FAILED tests/test_backend.py::test_symlink_escape - FileNotFoundError: [WinEr...
+1 failed, 43 passed, 1 skipped, 8 warnings in 4.44s

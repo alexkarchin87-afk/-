@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.devassist.ProjectReaderTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-26T04:40:38" hostname="ac7b89ae9c6b" time="0.028">
+  <properties/>
+  <testcase name="readsOnlyTheNamedProject" classname="com.voiceagent.oneplus13.devassist.ProjectReaderTest" time="0.007"/>
+  <testcase name="boundsUploads" classname="com.voiceagent.oneplus13.devassist.ProjectReaderTest" time="0.018"/>
+  <testcase name="rejectsSymlinkFilesAndDirectories" classname="com.voiceagent.oneplus13.devassist.ProjectReaderTest" time="0.001"/>
+  <testcase name="excludesCredentialsAndDependencyTrees" classname="com.voiceagent.oneplus13.devassist.ProjectReaderTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,143 @@
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Checking the license for package Android SDK Platform-Tools in /workspace/voiceagent-tools/android-sdk/licenses
+Warning: License for package Android SDK Platform-Tools not accepted.
+WARNING: platform-tools package is not installed. Please accept the installation licence to continue
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:genVoskUuid
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :core:ai-engines:preBuild UP-TO-DATE
+> Task :core:ai-engines:preDebugBuild UP-TO-DATE
+> Task :core:ai-engines:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :core:ai-engines:generateDebugResValues UP-TO-DATE
+> Task :core:ai-engines:generateDebugResources UP-TO-DATE
+> Task :core:ai-engines:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :core:ai-engines:extractDeepLinksDebug UP-TO-DATE
+> Task :core:ai-engines:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :core:ai-engines:compileDebugLibraryResources UP-TO-DATE
+> Task :core:ai-engines:parseDebugLocalResources UP-TO-DATE
+> Task :core:ai-engines:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :core:ai-engines:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:ai-engines:generateDebugBuildConfig UP-TO-DATE
+> Task :core:ai-engines:compileDebugKotlin UP-TO-DATE
+> Task :core:ai-engines:javaPreCompileDebug UP-TO-DATE
+> Task :core:ai-engines:compileDebugJavaWithJavac UP-TO-DATE
+> Task :core:ai-engines:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:preDebugUnitTestBuild
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :core:ai-engines:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:ai-engines:processDebugJavaRes UP-TO-DATE
+> Task :core:ai-engines:preDebugUnitTestBuild UP-TO-DATE
+> Task :core:ai-engines:generateDebugUnitTestStubRFile UP-TO-DATE
+
+> Task :core:ai-engines:compileDebugUnitTestKotlin
+w: file:///workspace/voiceagent-fix/VoiceAgent-v2/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/CancellableHttpTest.kt:31:36 'fun create(contentType: MediaType?, content: String): ResponseBody' is deprecated. Moved to extension function. Put the 'content' argument first to fix Java.
+w: file:///workspace/voiceagent-fix/VoiceAgent-v2/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/CancellableHttpTest.kt:42:36 'fun create(contentType: MediaType?, content: String): ResponseBody' is deprecated. Moved to extension function. Put the 'content' argument first to fix Java.
+
+> Task :core:ai-engines:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :core:ai-engines:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :core:ai-engines:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:compileDebugKotlin
+
+> Task :core:ai-engines:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:processDebugJavaRes
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :core:ai-engines:mergeDebugShaders UP-TO-DATE
+> Task :core:ai-engines:compileDebugShaders NO-SOURCE
+> Task :core:ai-engines:generateDebugAssets UP-TO-DATE
+> Task :core:ai-engines:packageDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:dexBuilderDebug
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :app:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :core:ai-engines:bundleLibRuntimeToDirDebug
+> Task :app:mergeDebugJavaResource
+> Task :app:mergeLibDexDebug
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :core:ai-engines:mergeDebugJniLibFolders UP-TO-DATE
+> Task :core:ai-engines:mergeDebugNativeLibs NO-SOURCE
+> Task :core:ai-engines:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:mergeProjectDexDebug
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :core:ai-engines:stripDebugDebugSymbols NO-SOURCE
+> Task :core:ai-engines:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :core:ai-engines:extractDebugAnnotations
+> Task :core:ai-engines:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :core:ai-engines:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :core:ai-engines:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :core:ai-engines:prepareDebugArtProfile UP-TO-DATE
+> Task :core:ai-engines:prepareLintJarForPublish UP-TO-DATE
+> Task :core:ai-engines:mergeDebugJavaResource
+> Task :core:ai-engines:syncDebugLibJars
+> Task :core:ai-engines:bundleDebugLocalLintAar
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :core:ai-engines:createFullJarDebug
+> Task :core:ai-engines:writeDebugLintModelMetadata UP-TO-DATE
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :core:ai-engines:extractProguardFiles UP-TO-DATE
+> Task :core:ai-engines:generateDebugLintModel
+> Task :app:generateDebugLintReportModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:lintAnalyzeDebugUnitTest
+> Task :core:ai-engines:preDebugAndroidTestBuild UP-TO-DATE
+> Task :core:ai-engines:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :core:ai-engines:generateDebugAndroidTestLintModel
+> Task :core:ai-engines:generateDebugUnitTestLintModel
+> Task :core:ai-engines:lintAnalyzeDebugAndroidTest
+> Task :core:ai-engines:lintAnalyzeDebug
+> Task :core:ai-engines:lintAnalyzeDebugUnitTest
+> Task :app:lintAnalyzeDebug
+
+> Task :app:lintReportDebug
+Wrote HTML report to file:///workspace/voiceagent-fix/VoiceAgent-v2/app/build/reports/lint-results-debug.html
+
+> Task :app:lintDebug
+
+BUILD SUCCESSFUL in 1m 12s
+100 actionable tasks: 34 executed, 66 up-to-date

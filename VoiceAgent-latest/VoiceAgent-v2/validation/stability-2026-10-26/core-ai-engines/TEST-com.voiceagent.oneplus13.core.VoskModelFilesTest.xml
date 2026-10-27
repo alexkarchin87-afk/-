@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.core.VoskModelFilesTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-24T11:40:34" hostname="ac7b89ae9c6b" time="0.013">
+  <properties/>
+  <testcase name="acceptsSupportedGraphLayoutsButNotOneHalfOfSplitGraph" classname="com.voiceagent.oneplus13.core.VoskModelFilesTest" time="0.008"/>
+  <testcase name="pathMatchesVoskStorageService03545" classname="com.voiceagent.oneplus13.core.VoskModelFilesTest" time="0.002"/>
+  <testcase name="incompleteStampedCacheForcesRecopyWithoutDeletingUnrelatedFiles" classname="com.voiceagent.oneplus13.core.VoskModelFilesTest" time="0.001"/>
+  <testcase name="completeCacheIsNotInvalidated" classname="com.voiceagent.oneplus13.core.VoskModelFilesTest" time="0.0"/>
+  <testcase name="uuidAloneIsNotAModel" classname="com.voiceagent.oneplus13.core.VoskModelFilesTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

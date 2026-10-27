@@ -1,0 +1,782 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -114,6 +114,8 @@
+ 
+     // Юнит-тесты на JVM: org.json из Android-заглушки не работает, нужна настоящая реализация.
+     testImplementation(libs.junit)
++    testImplementation("org.mockito:mockito-core:5.14.2")
++    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+     testImplementation(libs.org.json)
+ }
+ 
+--- a/app/src/main/java/com/voiceagent/oneplus13/agent/AgentOrchestrator.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/agent/AgentOrchestrator.kt
+@@ -2,6 +2,9 @@
+ 
+ import android.util.Log
+ import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.currentCoroutineContext
++import kotlinx.coroutines.ensureActive
++import com.voiceagent.oneplus13.core.VoiceRuntime
+ import android.content.Context
+ import com.voiceagent.oneplus13.core.AgentEvent
+ import com.voiceagent.oneplus13.core.AgentEventBus
+@@ -79,7 +82,12 @@
+     private var pendingExpiresAt = 0L
+     private var pendingSource = ""
+     val isLectureActive: Boolean get() = lectureCommands.isActive
+-    fun close() = lectureCommands.close()
++    @Volatile private var closed = false
++    fun close() { closed = true; lectureCommands.close() }
++    private suspend fun ensureRequestActive() {
++        currentCoroutineContext().ensureActive()
++        if (closed) throw CancellationException("Agent closed")
++    }
+ 
+     private var lastGeneratedProjectName: String? = null
+     private var lastNotesTopic: String? = null
+@@ -109,21 +117,31 @@
+     }
+ 
+     suspend fun handleTranscript(text: String, source: String = "text", receivedAt: Long = System.nanoTime()) = inputLock.withLock {
+-        AudioCaptureGate.withPaused {
+-            requestId++
+-            activeSource = source
+-            try {
+-                handleTranscriptLocked(text, receivedAt)
+-            } catch (e: CancellationException) {
+-                confirmations.clear()
+-                pendingCodeChoice = null
+-                pendingGrantPermissions = false
+-                throw e
+-            } catch (e: Exception) {
+-                confirmations.clear()
+-                pendingCodeChoice = null
+-                pendingGrantPermissions = false
+-                AgentEventBus.publish(AgentEvent.Error("Не удалось выполнить запрос", e))
++        VoiceRuntime.during(VoiceRuntime.Phase.PROCESSING) {
++            AudioCaptureGate.withPaused {
++                ensureRequestActive()
++                requestId++
++                activeSource = source
++                try {
++                    handleTranscriptLocked(text, receivedAt)
++                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
++                    // An operation's own timeout must not cancel the service listening loop.
++                    ensureRequestActive()
++                    confirmations.clear()
++                    pendingCodeChoice = null
++                    pendingGrantPermissions = false
++                    AgentEventBus.publish(AgentEvent.Error("Время ожидания истекло. Можно повторить команду.", e))
++                } catch (e: CancellationException) {
++                    confirmations.clear()
++                    pendingCodeChoice = null
++                    pendingGrantPermissions = false
++                    throw e
++                } catch (e: Exception) {
++                    confirmations.clear()
++                    pendingCodeChoice = null
++                    pendingGrantPermissions = false
++                    AgentEventBus.publish(AgentEvent.Error("Не удалось выполнить запрос", e))
++                }
+             }
+         }
+     }
+@@ -206,6 +224,11 @@
+             return
+         }
+ 
++        localAppCommand(text)?.let { action ->
++            proposeAction(action.first, action.second)
++            return
++        }
++
+         // "Спроси Клода ..." — мгновенно в обход классификатора и черновика
+         // DeepSeek, прямо к Claude. Один сетевой вызов вместо потенциальных
+         // двух — дешевле по токенам, а не дороже, ровно как просили.
+@@ -213,6 +236,7 @@
+             AgentEventBus.publish(AgentEvent.ThinkingStarted(question))
+             try {
+                 val reply = llm.askClaudeDirect(buildSystemPrompt(), history.toList(), question)
++                ensureRequestActive()
+                 remember(ChatMessage("user", question))
+                 remember(ChatMessage("assistant", reply))
+                 AgentEventBus.publish(AgentEvent.Reply(reply))
+@@ -229,6 +253,7 @@
+         AgentEventBus.publish(AgentEvent.ThinkingStarted(text))
+         try {
+             val reply = llm.complete(buildSystemPrompt(), history.toList(), text)
++            ensureRequestActive()
+             remember(ChatMessage("user", text))
+             remember(ChatMessage("assistant", reply))
+ 
+@@ -251,6 +276,7 @@
+      *  spotting a fresh BotFather token — these always require a spoken confirmation
+      *  before VoiceAgent acts on a captured secret. */
+     private suspend fun proposeAction(action: String, params: Map<String, String>) {
++        ensureRequestActive()
+         val boundParams = if (action == "reply_notification") {
+             val target = com.voiceagent.oneplus13.system.NotificationReader.instance
+                 ?.resolveReplyTarget(params.getValue("name"))
+@@ -263,13 +289,16 @@
+         } else params.toMap()
+         val details = boundParams.filterKeys { it !in setOf("notification_key", "notification_time") }
+             .entries.joinToString("; ") { "${it.key}: ${it.value}" }
+-        val question = if (action == "lecture_retry_summary")
++        val question = if (action == "open_app")
++            "Открыть приложение ${params["package"]}? Скажите да или нет."
++        else if (action == "lecture_retry_summary")
+             "Подготовить резюме последней сохранённой лекции? Её текст будет отправлен выбранной LLM. Скажите да или нет."
+         else "Подтвердите действие $action ($details). Скажите да или нет."
+         val pending = PendingConfirmation(action, boundParams, question)
+         AgentEventBus.publish(AgentEvent.Reply(question))
+         tts.speak(question)
+         // TTL begins after the question has finished speaking.
++        ensureRequestActive()
+         confirmations.offer(pending, requestId, activeSource, CONFIRMATION_TTL_NS)
+     }
+ 
+@@ -277,6 +306,7 @@
+         if (event !is AgentEvent.ActionRequested) return
+         if (event.action !in setOf("botfather_token_found", "lecture_stop_requested")) return
+         inputLock.withLock {
++            ensureRequestActive()
+             AudioCaptureGate.withPaused {
+                 if (event.action == "lecture_stop_requested") {
+                     val sessionId = event.params["session_id"] ?: return@withPaused
+@@ -294,6 +324,7 @@
+                 )
+                 AgentEventBus.publish(AgentEvent.Reply(question))
+                 tts.speak(question)
++                ensureRequestActive()
+                 confirmations.offer(pending, requestId, null, CONFIRMATION_TTL_NS)
+             }
+         }
+@@ -342,11 +373,26 @@
+     }
+ 
+     private suspend fun dispatch(action: String, params: Map<String, String>) {
++        ensureRequestActive()
+         when (action) {
+-            "open_app" -> params["package"]?.let { systemController.openApp(it) }
++            "open_app" -> params["package"]?.let {
++                val result = systemController.openAppResult(it)
++                Log.i("VA_ROUTE", "open_app result=${result.name}")
++                // A successful startActivity is only a request; Android may restrict background launches.
++                val message = when (result) {
++                    SystemController.AppOpenResult.REQUESTED -> "Запрос на открытие передан Android. Проверьте, появилось ли приложение."
++                    SystemController.AppOpenResult.NOT_FOUND -> "Не нашёл однозначно подходящее приложение. Проверьте, установлено ли оно."
++                    SystemController.AppOpenResult.DENIED -> "Android запретил открытие. Откройте экран Вани и повторите команду."
++                }
++                AgentEventBus.publish(AgentEvent.Reply(message))
++                tts.speak(message)
++            }
+             "open_url" -> params["url"]?.let { systemController.openUrl(it) }
+             "set_volume" -> params["percent"]?.toIntOrNull()?.let { systemController.setMediaVolume(it) }
+-            "tap_text" -> params["label"]?.let { systemController.tapByText(it) }
++            "tap_text" -> params["label"]?.let {
++                val done = systemController.tapByText(it)
++                tts.speak(if (done) "Нажатие принято." else "Нажатие не выполнено. Проверьте спецвозможности Вани и элемент на экране.")
++            }
+             "swipe_up" -> systemController.swipeUp()
+             "lecture_start" -> lectureCommands.start(params["title"] ?: "Лекция")
+             "lecture_stop" -> lectureCommands.stop()
+--- /dev/null
++++ b/app/src/main/java/com/voiceagent/oneplus13/agent/LocalAppCommand.kt
+@@ -0,0 +1,8 @@
++package com.voiceagent.oneplus13.agent
++
++/** Narrow fast path for an existing action, independent of cloud connectivity. Never scans model text. */
++internal fun localAppCommand(text: String): Pair<String, Map<String, String>>? {
++    if (!Regex("(?iu)^открой\\s+(?:приложение\\s+)?(?:телеграм|телеграмм|telegram)[.!?]?$")
++            .matches(text.trim())) return null
++    return "open_app" to mapOf("package" to "org.telegram.messenger")
++}
+--- a/app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
+@@ -63,7 +63,6 @@
+     private var overlay: OverlayBubbleController? = null
+     private var listeningJob: Job? = null
+     private var initFailed = false
+-    private var conversationActiveUntil = 0L
+ 
+     override fun onCreate() {
+         super.onCreate()
+@@ -100,9 +99,14 @@
+             return
+         }
+ 
++        scope.launch { VoiceRuntime.phase.collect { Log.i("VA_ROUTE", "phase=${it.name}") } }
++
+         stt.ensureModel(
+             onReady = { scope.launch { if (job.isActive) startListeningLoop() } },
+-            onError = { scope.launch { AgentEventBus.publish(AgentEvent.Error("Модель STT не загрузилась", it)) } }
++            onError = { scope.launch {
++                Log.i("VA_ROUTE", "stt_model=unavailable")
++                AgentEventBus.publish(AgentEvent.Error("Модель STT не загрузилась. Проверьте наличие модели в APK.", it))
++            } }
+         )
+ 
+         // Если пользователь раньше включил оверлей и разрешение уже выдано —
+@@ -116,6 +120,7 @@
+         // если экран приложения сейчас закрыт.
+         scope.launch {
+             AgentEventBus.events.collect { event ->
++                if (event is AgentEvent.Error) Log.i("VA_ROUTE", "route_error")
+                 if (event is AgentEvent.ProjectReady) postProjectReadyNotification(event)
+             }
+         }
+@@ -142,23 +147,20 @@
+     }
+ 
+     private suspend fun listenOnce() {
+-        stt.awaitWakeWord()                                   // фаза 1: грамматика ["ваня"]
+-        AgentEventBus.publish(AgentEvent.WakeDetected)        // модуль событий не шлёт — шлёт сервис
++        var firstCommand: String? = stt.awaitWakeCommand()
++        AgentEventBus.publish(AgentEvent.WakeDetected)
+         uiScope.launch { overlay?.flashOnWake() }
+-        delay(MIC_HANDOFF_DELAY_MS)                           // AudioRecord должен освободиться
+         while (!orchestrator.isLectureActive) {
+-            val transcript = withTimeoutOrNull(CONVERSATION_WINDOW_MS) {
+-                stt.listen().first { stripWakeWord(it).isNotBlank() }
++            // first() closes/join-cleans the recorder before LLM/TTS starts.
++            val cleaned = firstCommand?.takeIf { it.isNotBlank() } ?: withTimeoutOrNull(CONVERSATION_WINDOW_MS) {
++                stt.listen().first { (commandAfterWake(it) ?: it).isNotBlank() }
++                    .let { commandAfterWake(it) ?: it.trim() }
+             } ?: return
+-            val cleaned = stripWakeWord(transcript)
++            firstCommand = null
+             AgentEventBus.publish(AgentEvent.Heard(cleaned))
+-            // first() has joined callbackFlow cleanup; idle timeout never wraps LLM/actions/TTS.
+             orchestrator.handleTranscript(cleaned, "voice")
+         }
+     }
+-
+-    private fun stripWakeWord(text: String): String =
+-        text.trim().replaceFirst(Regex("(?iu)^(?:эй\\s+)?ваня\\b[\\s,.:!?-]*"), "").trim()
+ 
+     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int =
+         if (initFailed) START_NOT_STICKY else START_STICKY
+@@ -289,9 +291,7 @@
+     companion object {
+         private const val TAG = "VoiceAgentService"
+         private const val RESTART_DELAY_MS = 2_000L
+-        private const val MIC_HANDOFF_DELAY_MS = 250L
+         private const val NOTIF_ID = 1001
+         private const val CONVERSATION_WINDOW_MS = 20_000L
+-        private val WAKE_WORDS = listOf("ваня", "эй ваня")
+     }
+ }
+--- /dev/null
++++ b/app/src/main/java/com/voiceagent/oneplus13/system/AppLabelResolver.kt
+@@ -0,0 +1,12 @@
++package com.voiceagent.oneplus13.system
++
++internal data class LaunchableApp(val packageName: String, val label: String)
++
++/** Multiple launcher activities for one package are fine; ambiguous packages are never guessed. */
++internal fun resolveAppLabel(query: String, apps: List<LaunchableApp>): String? {
++    val key = query.trim()
++    if (key.isBlank()) return null
++    val exact = apps.filter { it.label.equals(key, ignoreCase = true) }
++    val matches = exact.ifEmpty { apps.filter { it.label.contains(key, ignoreCase = true) } }
++    return matches.map { it.packageName }.distinct().singleOrNull()
++}
+--- a/app/src/main/java/com/voiceagent/oneplus13/system/SystemController.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/system/SystemController.kt
+@@ -30,37 +30,35 @@
+      * команда или ИИ-сборщик сценария) не уверена в точном пакете. Сначала
+      * пробует как есть; если это не пакет, ищет среди установленных
+      * приложений совпадение по видимому названию (без учёта регистра,
+-     * частичное). Запрос ACTION_MAIN/CATEGORY_LAUNCHER не подпадает под
+-     * ограничения видимости пакетов (Android 11+) — отдельное разрешение
+-     * QUERY_ALL_PACKAGES не нужно.
++     * частичное, только однозначное). Видимость launcher activities на Android 11+
++     * обеспечивается соответствующим <queries> в AndroidManifest.xml.
++     * QUERY_ALL_PACKAGES не используется.
+      */
+-    fun openApp(nameOrPackage: String): Boolean {
+-        val exact = context.packageManager.getLaunchIntentForPackage(nameOrPackage)
+-        val intent = exact ?: resolveByLabel(nameOrPackage)?.let {
+-            context.packageManager.getLaunchIntentForPackage(it)
+-        }
+-        intent ?: return false
+-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+-        context.startActivity(intent)
+-        return true
++    enum class AppOpenResult { REQUESTED, NOT_FOUND, DENIED }
++
++    fun openApp(nameOrPackage: String): Boolean = openAppResult(nameOrPackage) == AppOpenResult.REQUESTED
++
++    fun openAppResult(nameOrPackage: String): AppOpenResult {
++        val query = nameOrPackage.trim()
++        if (query.isBlank()) return AppOpenResult.NOT_FOUND
++        return try {
++            val exact = context.packageManager.getLaunchIntentForPackage(query)
++            val intent = exact ?: resolveByLabel(query)?.let { context.packageManager.getLaunchIntentForPackage(it) }
++                ?: return AppOpenResult.NOT_FOUND
++            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++            context.startActivity(intent)
++            AppOpenResult.REQUESTED
++        } catch (_: SecurityException) { AppOpenResult.DENIED }
++        catch (_: android.content.ActivityNotFoundException) { AppOpenResult.NOT_FOUND }
+     }
+ 
+     private fun resolveByLabel(query: String): String? {
+         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+         val pm = context.packageManager
+-        val candidates = pm.queryIntentActivities(launcherIntent, 0)
+-        val normalizedQuery = query.trim().lowercase()
+-        if (normalizedQuery.isBlank()) return null
+-
+-        // Сначала точное совпадение по названию, потом — частичное, чтобы
+-        // "Карты" не подтягивало случайно "Автокарты" раньше настоящих "Google Карты".
+-        val exactLabelMatch = candidates.firstOrNull {
+-            it.loadLabel(pm).toString().lowercase() == normalizedQuery
++        val candidates = pm.queryIntentActivities(launcherIntent, 0).map {
++            LaunchableApp(it.activityInfo.packageName, it.loadLabel(pm).toString())
+         }
+-        val partialLabelMatch = candidates.firstOrNull {
+-            it.loadLabel(pm).toString().lowercase().contains(normalizedQuery)
+-        }
+-        return (exactLabelMatch ?: partialLabelMatch)?.activityInfo?.packageName
++        return resolveAppLabel(query, candidates)
+     }
+ 
+     fun openUrl(url: String) {
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
+@@ -36,6 +36,7 @@
+ import androidx.compose.material3.Text
+ import androidx.compose.material3.TextField
+ import androidx.compose.material3.TextFieldDefaults
++import androidx.compose.runtime.collectAsState
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.getValue
+@@ -99,31 +100,18 @@
+     }
+ }
+ 
+-/**
+- * lastStatus на шине никогда не сбрасывается сам («ответ: …» висит вечно), поэтому
+- * кратковременные фазы через паузу возвращаются в IDLE — иначе индикатор «работал» бы бесконечно.
+- */
++/** Actual capture/processing/TTS lifetimes replace guessed 6/90-second UI resets. */
+ @Composable
+ fun rememberAgentPhase(running: Boolean, status: String): AgentPhase {
+-    val raw = resolvePhase(running, status)
+-    var phase by remember { mutableStateOf(raw) }
+-    LaunchedEffect(raw, status) {
+-        phase = raw
+-        val timeout = when (raw) {
+-            AgentPhase.LISTENING -> 20_000L
+-            AgentPhase.HEARD -> 6_000L
+-            AgentPhase.THINKING -> 90_000L
+-            AgentPhase.ACTING -> 8_000L
+-            AgentPhase.SPEAKING -> 6_000L
+-            AgentPhase.ERROR -> 10_000L
+-            else -> 0L
+-        }
+-        if (timeout > 0) {
+-            delay(timeout)
+-            phase = AgentPhase.IDLE
+-        }
+-    }
+-    return phase
++    val actual by com.voiceagent.oneplus13.core.VoiceRuntime.phase.collectAsState()
++    if (!running) return AgentPhase.OFF
++    return when (actual) {
++        com.voiceagent.oneplus13.core.VoiceRuntime.Phase.LISTENING -> AgentPhase.LISTENING
++        com.voiceagent.oneplus13.core.VoiceRuntime.Phase.PROCESSING -> AgentPhase.THINKING
++        com.voiceagent.oneplus13.core.VoiceRuntime.Phase.SPEAKING -> AgentPhase.SPEAKING
++        com.voiceagent.oneplus13.core.VoiceRuntime.Phase.IDLE ->
++            if (resolvePhase(true, status) == AgentPhase.ERROR) AgentPhase.ERROR else AgentPhase.IDLE
++    }
+ }
+ 
+ private fun statusDetail(status: String, phase: AgentPhase): String {
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/agent/AgentOrchestratorRouteTest.kt
+@@ -0,0 +1,121 @@
++package com.voiceagent.oneplus13.agent
++
++import android.content.Context
++import android.util.Log
++import com.voiceagent.oneplus13.core.*
++import com.voiceagent.oneplus13.core.security.SecretsStore
++import com.voiceagent.oneplus13.lecture.LectureCommands
++import com.voiceagent.oneplus13.system.SystemController
++import com.voiceagent.oneplus13.workflow.WorkflowStorage
++import kotlinx.coroutines.*
++import kotlinx.coroutines.test.*
++import org.junit.*
++import org.junit.Assert.*
++import org.mockito.Mockito.*
++import org.mockito.MockedConstruction
++import kotlin.coroutines.Continuation
++import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
++import kotlin.coroutines.resume
++
++/** Runs the real orchestrator; only platform/storage/LLM/TTS boundaries are mocked. */
++@OptIn(ExperimentalCoroutinesApi::class)
++class AgentOrchestratorRouteTest {
++    private val resources=mutableListOf<AutoCloseable>()
++    private lateinit var systems:MockedConstruction<SystemController>
++    private lateinit var workflows:MockedConstruction<WorkflowStorage>
++    private lateinit var llm:LLMClient
++    private lateinit var tts:TTSEngine
++    @Before fun setup() {
++        resources += mockStatic(Log::class.java)
++        systems=mockConstruction(SystemController::class.java) { mock,_ ->
++            `when`(mock.openAppResult(anyString())).thenReturn(SystemController.AppOpenResult.REQUESTED)
++        };resources+=systems
++        resources+=mockConstruction(LectureCommands::class.java)
++        resources+=mockConstruction(SecretsStore::class.java)
++        resources+=mockConstruction(UserMemory::class.java){mock,_->`when`(mock.factsBlock()).thenReturn("")}
++        resources+=mockConstruction(FeatureRequests::class.java)
++        workflows=mockConstruction(WorkflowStorage::class.java);resources+=workflows
++        llm=mock(LLMClient::class.java);tts=mock(TTSEngine::class.java)
++    }
++    @After fun cleanup(){resources.asReversed().forEach{it.close()}}
++    private fun TestScope.agent()=AgentOrchestrator(mock(Context::class.java),llm,tts,backgroundScope)
++    private suspend fun reply(text:String){`when`(llm.complete(anyString(),anyList(),anyString(),anyBoolean())).thenReturn(text)}
++
++    @Test fun offlineLocalRequestRequiresConfirmationAndExecutesOnce()=runTest {
++        reply("Обычный ответ")
++        val agent=agent();agent.handleTranscript("открой Telegram","voice")
++        verifyNoInteractions(llm);verify(systems.constructed().single(),never()).openAppResult(anyString())
++        agent.handleTranscript("да","voice");agent.handleTranscript("да","voice")
++        verify(systems.constructed().single(),times(1)).openAppResult("org.telegram.messenger")
++        verify(tts).speak("Запрос на открытие передан Android. Проверьте, появилось ли приложение.")
++        assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++    }
++    @Test fun wrongSourceCannotConfirmVoiceAction()=runTest {
++        reply("Ответ");val agent=agent();agent.handleTranscript("открой Telegram","voice");agent.handleTranscript("да","text")
++        verify(systems.constructed().single(),never()).openAppResult(anyString())
++    }
++    @Test fun modelExampleIsSpokenWithoutExecutingOrProposing()=runTest {
++        val text="Пример: {\"action\":\"open_app\",\"params\":{\"package\":\"org.telegram.messenger\"}}"
++        reply(text);val agent=agent();agent.handleTranscript("дай пример","text")
++        verify(tts).speak(text);verify(systems.constructed().single(),never()).openAppResult(anyString())
++    }
++    @Test fun failedLaunchIsReportedWithoutFalseSuccess()=runTest {
++        val agent=agent();`when`(systems.constructed().single().openAppResult(anyString())).thenReturn(SystemController.AppOpenResult.NOT_FOUND)
++        agent.handleTranscript("открой Telegram");agent.handleTranscript("да")
++        verify(tts).speak("Не нашёл однозначно подходящее приложение. Проверьте, установлено ли оно.")
++    }
++    @Test fun offlineFailureDoesNotPoisonNextCommand()=runTest {
++        doAnswer{throw java.io.IOException("synthetic offline")}.`when`(llm).complete(anyString(),anyList(),anyString(),anyBoolean())
++        val agent=agent();agent.handleTranscript("расскажи историю")
++        agent.handleTranscript("открой Telegram");agent.handleTranscript("да")
++        verify(systems.constructed().single(),times(1)).openAppResult(anyString())
++        assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++    }
++    @Test fun lateReplyAfterCancellationCannotSpeakOrOfferAction()=runTest {
++        var pending:Continuation<String>?=null
++        doAnswer{inv->@Suppress("UNCHECKED_CAST") pending=inv.rawArguments.last() as Continuation<String>;COROUTINE_SUSPENDED}
++            .`when`(llm).complete(anyString(),anyList(),anyString(),anyBoolean())
++        val agent=agent();val task=launch{agent.handleTranscript("запрос")};runCurrent();assertNotNull(pending)
++        task.cancel();pending!!.resume("""{"action":"open_app","params":{"package":"org.telegram.messenger"}}""")
++        task.join();verifyNoInteractions(tts);verify(systems.constructed().single(),never()).openAppResult(anyString())
++        assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++    }
++    @Test fun closeRejectsLateReplyEvenFromUncooperativeTransport()=runTest {
++        var pending:Continuation<String>?=null
++        doAnswer{inv->@Suppress("UNCHECKED_CAST") pending=inv.rawArguments.last() as Continuation<String>;COROUTINE_SUSPENDED}
++            .`when`(llm).complete(anyString(),anyList(),anyString(),anyBoolean())
++        val agent=agent();val task=launch{agent.handleTranscript("запрос")};runCurrent();agent.close();pending!!.resume("late reply");task.join()
++        verifyNoInteractions(tts);assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++    }
++    @Test fun ttsFailureDoesNotLeavePendingConfirmation()=runTest {
++        reply("Ответ");var count=0
++        doAnswer{if(count++==0)throw IllegalStateException("synthetic TTS error");Unit}.`when`(tts).speak(anyString())
++        val agent=agent();agent.handleTranscript("открой Telegram");agent.handleTranscript("да")
++        verify(systems.constructed().single(),never()).openAppResult(anyString())
++    }
++    @Test fun operationTimeoutReturnsToListeningCallerAndAllowsNextCommand()=runTest {
++        val timeout=try { withTimeout(1){delay(10)};error("expected timeout") }
++            catch(e:TimeoutCancellationException){e}
++        doAnswer{throw timeout}.`when`(llm).complete(anyString(),anyList(),anyString(),anyBoolean())
++        val agent=agent();agent.handleTranscript("расскажи историю")
++        assertTrue(currentCoroutineContext().isActive)
++        assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++        agent.handleTranscript("открой Telegram");agent.handleTranscript("да")
++        verify(systems.constructed().single(),times(1)).openAppResult(anyString())
++    }
++    @Test fun validModelActionIsOnlyExecutedAfterFreshConfirmation()=runTest {
++        reply("""{"action":"open_app","params":{"package":"org.telegram.messenger"}}""")
++        val agent=agent();agent.handleTranscript("запусти мессенджер","voice")
++        verify(systems.constructed().single(),never()).openAppResult(anyString())
++        agent.handleTranscript("да","voice")
++        verify(systems.constructed().single(),times(1)).openAppResult("org.telegram.messenger")
++    }
++    @Test fun configuredWorkflowRetainsPriorityOverLocalTelegramShortcut()=runTest {
++        val agent=agent()
++        `when`(workflows.constructed().single().findByTriggerIn("открой Telegram"))
++            .thenReturn(com.voiceagent.oneplus13.workflow.Workflow(name="Мой сценарий",triggerPhrase="открой Telegram"))
++        agent.handleTranscript("открой Telegram")
++        verify(tts).speak("Подтвердите действие run_workflow (name: Мой сценарий). Скажите да или нет.")
++        verify(systems.constructed().single(),never()).openAppResult(anyString());verifyNoInteractions(llm)
++    }
++}
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/agent/LocalAppCommandTest.kt
+@@ -0,0 +1,12 @@
++package com.voiceagent.oneplus13.agent
++import org.junit.Assert.*
++import org.junit.Test
++class LocalAppCommandTest {
++    @Test fun recognizesOnlyExplicitSupportedRequest() {
++        for(text in listOf("открой Telegram","Открой приложение телеграм!","открой телеграмм"))
++            assertEquals("org.telegram.messenger",localAppCommand(text)!!.second["package"])
++    }
++    @Test fun rejectsExamplesNegationAndMultipleActions() {
++        for(text in listOf("не открой Telegram","Пример: открой Telegram","открой Telegram и удали чат","он сказал открой Telegram","открой Telegram\nзатем удали"))assertNull(text,localAppCommand(text))
++    }
++}
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/system/AppLabelResolverTest.kt
+@@ -0,0 +1,13 @@
++package com.voiceagent.oneplus13.system
++import org.junit.Assert.*
++import org.junit.Test
++class AppLabelResolverTest {
++    @Test fun exactLabelWinsButAmbiguousPartialDoesNotLaunchRandomApp() {
++        val apps=listOf(LaunchableApp("one","Telegram"),LaunchableApp("two","Telegram X"))
++        assertEquals("one",resolveAppLabel(" telegram ",apps));assertNull(resolveAppLabel("Tele",apps))
++    }
++    @Test fun duplicateActivitiesInOnePackageAreNotAmbiguous() {
++        assertEquals("one",resolveAppLabel("Maps",listOf(LaunchableApp("one","Maps"),LaunchableApp("one","Maps"))))
++        assertNull(resolveAppLabel(" ",emptyList()));assertNull(resolveAppLabel("missing",emptyList()))
++    }
++}
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/system/SystemControllerLaunchTest.kt
+@@ -0,0 +1,31 @@
++package com.voiceagent.oneplus13.system
++import android.content.Context
++import android.content.Intent
++import android.content.pm.PackageManager
++import android.media.AudioManager
++import org.junit.Assert.*
++import org.junit.Test
++import org.mockito.Mockito.*
++class SystemControllerLaunchTest {
++    @Test fun acceptedLaunchUsesNewTaskExactlyOnce() {
++        mockConstruction(MediaSessionReader::class.java).use {
++            val context=mock(Context::class.java);val pm=mock(PackageManager::class.java)
++            val intent=mock(Intent::class.java,RETURNS_SELF)
++            `when`(context.packageManager).thenReturn(pm)
++            `when`(context.getSystemService(Context.AUDIO_SERVICE)).thenReturn(mock(AudioManager::class.java))
++            `when`(pm.getLaunchIntentForPackage("org.telegram.messenger")).thenReturn(intent)
++            assertEquals(SystemController.AppOpenResult.REQUESTED,SystemController(context).openAppResult("org.telegram.messenger"))
++            verify(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);verify(context,times(1)).startActivity(intent)
++        }
++    }
++    @Test fun permissionRejectionBecomesExplicitDeniedResult() {
++        mockConstruction(MediaSessionReader::class.java).use {
++            val context=mock(Context::class.java);val pm=mock(PackageManager::class.java);val intent=mock(Intent::class.java,RETURNS_SELF)
++            `when`(context.packageManager).thenReturn(pm)
++            `when`(context.getSystemService(Context.AUDIO_SERVICE)).thenReturn(mock(AudioManager::class.java))
++            `when`(pm.getLaunchIntentForPackage("org.telegram.messenger")).thenReturn(intent)
++            doThrow(SecurityException("synthetic policy")).`when`(context).startActivity(intent)
++            assertEquals(SystemController.AppOpenResult.DENIED,SystemController(context).openAppResult("org.telegram.messenger"))
++        }
++    }
++}
+--- a/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/CancellableHttp.kt
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/CancellableHttp.kt
+@@ -2,6 +2,7 @@
+ 
+ import kotlinx.coroutines.suspendCancellableCoroutine
+ import kotlinx.coroutines.delay
++import kotlinx.coroutines.withTimeout
+ import okhttp3.Call
+ import okhttp3.Callback
+ import okhttp3.OkHttpClient
+@@ -39,14 +40,14 @@
+ })
+ 
+ internal suspend fun executeLlmRequest(
+-    http: OkHttpClient, request: Request, maxRetries: Int, extract: (String) -> String?
+-): String {
++    http: OkHttpClient, request: Request, maxRetries: Int, timeoutMillis: Long = 210_000L, extract: (String) -> String?
++): String = withTimeout(timeoutMillis) {
+     require(maxRetries in 0..5)
+     repeat(maxRetries + 1) { attempt ->
+         try {
+             val payload = http.newCall(request).awaitPayload()
+             if (payload.status in 200..299) {
+-                return extract(payload.body)?.takeIf { it.isNotBlank() }
++                return@withTimeout extract(payload.body)?.takeIf { it.isNotBlank() }
+                     ?: throw IllegalStateException("Empty LLM response")
+             }
+             if ((payload.status != 429 && payload.status !in 500..599) || attempt == maxRetries)
+--- a/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/LLMClient.kt
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/LLMClient.kt
+@@ -87,6 +87,7 @@
+ 
+     private val http = OkHttpClient.Builder()
+         .connectTimeout(20, TimeUnit.SECONDS)
++        .callTimeout(200, TimeUnit.SECONDS)
+         // deepseek-reasoner и Claude (до 8192 токенов) отвечают заметно дольше минуты
+         .readTimeout(180, TimeUnit.SECONDS)
+         .build()
+@@ -248,6 +249,6 @@
+     }
+ 
+     private suspend fun executeWithRetry(request: Request, extract: (String) -> String?): String {
+-        return executeLlmRequest(http, request, maxRetries, extract)
++        return executeLlmRequest(http, request, maxRetries, extract = extract)
+     }
+ }
+--- a/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/STTEngine.kt
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/STTEngine.kt
+@@ -59,7 +59,14 @@
+             .first { it.split(Regex("\\s+")).any { word -> word.equals(wakeWord, ignoreCase = true) } }
+     }
+ 
+-    fun listen(): Flow<String> = capture(null, false)
++    /** Full final recognition avoids throwing away the command spoken together with the wake word. */
++    suspend fun awaitWakeCommand(): String = commandAfterWake(
++        capture(null, false).first { commandAfterWake(it) != null }
++    ).orEmpty()
++
++    fun listen(): Flow<String> = flow {
++        VoiceRuntime.during(VoiceRuntime.Phase.LISTENING) { emitAll(capture(null, false)) }
++    }
+ 
+     @OptIn(ExperimentalCoroutinesApi::class)
+     private fun capture(grammar: String?, partials: Boolean): Flow<String> =
+--- a/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/TTSEngine.kt
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/TTSEngine.kt
+@@ -47,7 +47,9 @@
+             check(!closed) { "TTS is closed" }
+             AudioCaptureGate.withPaused {
+                 applyLanguageOnce()
+-                for (chunk in splitForTts(text)) withTimeout(60_000L) { speakChunk(chunk) }
++                VoiceRuntime.during(VoiceRuntime.Phase.SPEAKING) {
++                    for (chunk in splitForTts(text)) withTimeout(60_000L) { speakChunk(chunk) }
++                }
+             }
+         }
+     }
+--- /dev/null
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoiceRuntime.kt
+@@ -0,0 +1,20 @@
++package com.voiceagent.oneplus13.core
++
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.asStateFlow
++
++/** Actual operation lifetimes, not UI timers. Nested/concurrent owners cannot clear another operation. */
++object VoiceRuntime {
++    enum class Phase { IDLE, LISTENING, PROCESSING, SPEAKING }
++    private val lock = Any()
++    private val active = mutableMapOf<Any, Phase>()
++    private val mutablePhase = MutableStateFlow(Phase.IDLE)
++    val phase = mutablePhase.asStateFlow()
++    suspend fun <T> during(phase: Phase, block: suspend () -> T): T {
++        val owner = Any()
++        synchronized(lock) { active[owner] = phase; update() }
++        try { return block() }
++        finally { synchronized(lock) { active.remove(owner); update() } }
++    }
++    private fun update() { mutablePhase.value = active.values.maxByOrNull { it.ordinal } ?: Phase.IDLE }
++}
+--- /dev/null
++++ b/core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/WakeCommand.kt
+@@ -0,0 +1,9 @@
++package com.voiceagent.oneplus13.core
++
++/** null: not addressed to the assistant; empty: wake word alone. Whole final phrase is retained. */
++fun commandAfterWake(text: String): String? {
++    val prefix = Regex("(?iu)^(?:эй\\s+)?ваня\\b[\\s,.:!?-]*")
++    val trimmed = text.trim()
++    val match = prefix.find(trimmed) ?: return null
++    return trimmed.substring(match.range.last + 1).trim()
++}
+--- a/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/CancellableHttpTest.kt
++++ b/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/CancellableHttpTest.kt
+@@ -22,7 +22,7 @@
+             client.dispatcher.executorService.shutdown()
+         }
+     }
+-    @Test fun retryTransientThenSucceed() = runTest {
++    @Test fun retryTransientThenSucceed() = runBlocking {
+         var attempts = 0
+         val client = OkHttpClient.Builder().addInterceptor { chain ->
+             attempts++
+@@ -34,7 +34,7 @@
+         assertEquals(3, attempts)
+         client.dispatcher.executorService.shutdown()
+     }
+-    @Test fun authenticationFailureDoesNotRetryOrExposeBody() = runTest {
++    @Test fun authenticationFailureDoesNotRetryOrExposeBody() = runBlocking {
+         var attempts = 0
+         val client = OkHttpClient.Builder().addInterceptor { chain ->
+             attempts++
+@@ -51,4 +51,19 @@
+         assertEquals(1, attempts)
+         client.dispatcher.executorService.shutdown()
+     }
++    @Test fun totalBudgetCancelsBlockedCall() = runBlocking {
++        MockWebServer().use { server ->
++            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
++            val client=OkHttpClient();var timedOut=false
++            val task=launch(Dispatchers.IO){
++                try { executeLlmRequest(client,Request.Builder().url(server.url("/")).build(),2,timeoutMillis=1000){it} }
++                catch(_:TimeoutCancellationException){timedOut=true}
++            }
++            assertNotNull(server.takeRequest(3,TimeUnit.SECONDS))
++            withTimeout(3000){task.join()};assertTrue(timedOut)
++            withTimeout(2000){while(client.dispatcher.runningCallsCount()>0)delay(10)}
++            assertEquals(0,client.dispatcher.runningCallsCount())
++            client.connectionPool.evictAll();client.dispatcher.executorService.shutdown()
++        }
++    }
+ }
+--- /dev/null
++++ b/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/VoiceRuntimeTest.kt
+@@ -0,0 +1,27 @@
++package com.voiceagent.oneplus13.core
++import kotlinx.coroutines.*
++import kotlinx.coroutines.test.*
++import org.junit.Assert.*
++import org.junit.Test
++@OptIn(ExperimentalCoroutinesApi::class)
++class VoiceRuntimeTest {
++    @Test fun processingSpeechThenIdleFollowRealCompletion()=runTest {
++        assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++        VoiceRuntime.during(VoiceRuntime.Phase.PROCESSING) {
++            assertEquals(VoiceRuntime.Phase.PROCESSING,VoiceRuntime.phase.value)
++            VoiceRuntime.during(VoiceRuntime.Phase.SPEAKING){delay(100_000);assertEquals(VoiceRuntime.Phase.SPEAKING,VoiceRuntime.phase.value)}
++            assertEquals(VoiceRuntime.Phase.PROCESSING,VoiceRuntime.phase.value)
++        }
++        assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++    }
++    @Test fun cancellingOneOwnerDoesNotClearAnother()=runTest {
++        val one=launch{VoiceRuntime.during(VoiceRuntime.Phase.LISTENING){awaitCancellation()}}
++        val two=launch{VoiceRuntime.during(VoiceRuntime.Phase.PROCESSING){awaitCancellation()}}
++        runCurrent();one.cancelAndJoin();assertEquals(VoiceRuntime.Phase.PROCESSING,VoiceRuntime.phase.value)
++        two.cancelAndJoin();assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++    }
++    @Test fun exceptionClearsPhase()=runTest {
++        try{VoiceRuntime.during(VoiceRuntime.Phase.SPEAKING){error("synthetic")}}catch(_:IllegalStateException){}
++        assertEquals(VoiceRuntime.Phase.IDLE,VoiceRuntime.phase.value)
++    }
++}
+--- /dev/null
++++ b/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/WakeCommandTest.kt
+@@ -0,0 +1,10 @@
++package com.voiceagent.oneplus13.core
++import org.junit.Assert.*
++import org.junit.Test
++class WakeCommandTest {
++    @Test fun continuousPhrasePreservesWholeCommand() { assertEquals("открой Telegram",commandAfterWake("Ваня, открой Telegram")) }
++    @Test fun wakeAloneAndWakeWithPauseAreDistinctFromUnrelatedSpeech() {
++        assertEquals("",commandAfterWake("эй Ваня!"));assertNull(commandAfterWake("Иваня открой"));assertNull(commandAfterWake("скажи Ваня открой"))
++    }
++    @Test fun caseAndWhitespaceDoNotLoseTail() { assertEquals("открой телеграм",commandAfterWake("  ЭЙ ВАНЯ: открой телеграм  ")) }
++}

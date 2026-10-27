@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.core.JsonExtractionTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-26T06:47:05" hostname="ac7b89ae9c6b" time="0.001">
+  <properties/>
+  <testcase name="bracesInsideStringsAreIgnored" classname="com.voiceagent.oneplus13.core.JsonExtractionTest" time="0.001"/>
+  <testcase name="trailingTextIsCut" classname="com.voiceagent.oneplus13.core.JsonExtractionTest" time="0.0"/>
+  <testcase name="noJsonGivesNull" classname="com.voiceagent.oneplus13.core.JsonExtractionTest" time="0.0"/>
+  <testcase name="fencedJsonIsUnwrapped" classname="com.voiceagent.oneplus13.core.JsonExtractionTest" time="0.0"/>
+  <testcase name="escapedQuotesAreHandled" classname="com.voiceagent.oneplus13.core.JsonExtractionTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

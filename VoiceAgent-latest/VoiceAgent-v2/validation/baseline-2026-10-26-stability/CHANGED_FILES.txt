@@ -1,0 +1,7 @@
+Изменения относительно VoiceAgent-v2-DEVICE-FIX.zip:
+app/src/main/java/com/voiceagent/oneplus13/agent/AgentOrchestrator.kt
+app/src/main/java/com/voiceagent/oneplus13/system/ChatsDigest.kt
+app/src/test/java/com/voiceagent/oneplus13/agent/AgentOrchestratorRouteTest.kt
+app/src/test/java/com/voiceagent/oneplus13/system/ChatsDigestTest.kt
+
+Документы: FIX_REPORT.md, TEST_RESULTS.md, NEXT_DEVICE_TEST.md, CHANGED_FILES.txt, STABILITY_FIX.patch, PACKAGING_CHECKS.json; доказательства validation/stability-2026-10-26; прежние отчёты validation/baseline-2026-10-24.

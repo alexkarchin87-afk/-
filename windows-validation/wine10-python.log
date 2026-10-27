@@ -1,0 +1,4 @@
+wine: created the configuration directory '/opt/wine'
+wine: failed to open L"C:\\windows\\syswow64\\rundll32.exe": c0000135
+Windows-10-10.0.19043-SP0
+25.0.1

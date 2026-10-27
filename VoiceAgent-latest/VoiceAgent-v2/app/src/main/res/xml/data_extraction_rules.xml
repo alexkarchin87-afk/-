@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="voiceagent_backup.json" />
+        <exclude domain="sharedpref" path="secure_prefs.xml" />
+        <exclude domain="sharedpref" path="voice_agent_secrets.xml" />
+        <exclude domain="sharedpref" path="voice_agent_secret_index.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="voiceagent_backup.json" />
+        <exclude domain="sharedpref" path="secure_prefs.xml" />
+        <exclude domain="sharedpref" path="voice_agent_secrets.xml" />
+        <exclude domain="sharedpref" path="voice_agent_secret_index.xml" />
+    </device-transfer>
+</data-extraction-rules>

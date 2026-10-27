@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-26",
+  "baseline_sha256": "f0393b5b2d124b1cd9107ce2142805866b855bc3371eafb6034eb424a18e5a46",
+  "changed_source_and_test_files": 4,
+  "baseline_files_removed": 0,
+  "patch_apply_and_byte_compare": "PASS",
+  "jvm_tests": {
+    "app": {
+      "tests": 98,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/ai-engines": {
+      "tests": 27,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "new_apk": false,
+  "model_included": false,
+  "zip_crc": "checked after writing"
+}

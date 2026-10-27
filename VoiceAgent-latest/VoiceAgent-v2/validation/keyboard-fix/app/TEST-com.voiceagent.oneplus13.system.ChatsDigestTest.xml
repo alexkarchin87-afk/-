@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.system.ChatsDigestTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-26T05:06:40" hostname="ac7b89ae9c6b" time="0.272">
+  <properties/>
+  <testcase name="networkFailureDoesNotConsumeNotifications" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.252"/>
+  <testcase name="cancellationDoesNotConsumeNotifications" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.008"/>
+  <testcase name="successfulSummaryAcknowledgesOnlyItsSnapshot" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

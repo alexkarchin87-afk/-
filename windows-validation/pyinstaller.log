@@ -1,0 +1,132 @@
+599 INFO: PyInstaller: 6.16.0, contrib hooks: 2026.9
+600 INFO: Python: 3.12.10
+610 INFO: Platform: Windows-10-10.0.19043-SP0
+611 INFO: Python environment: Z:\opt\python
+612 INFO: wrote Z:\opt\project\VanyaBridge.spec
+621 INFO: Removing temporary files and cleaning cache in C:\users\root\AppData\Local\pyinstaller
+6979 INFO: Module search paths (PYTHONPATH):
+['Z:\\opt\\project',
+ 'Z:\\opt\\python\\python312.zip',
+ 'Z:\\opt\\python\\DLLs',
+ 'Z:\\opt\\python\\Lib',
+ 'Z:\\opt\\python',
+ 'Z:\\opt\\python\\Lib\\site-packages',
+ 'Z:\\opt\\project']
+7992 INFO: Appending 'datas' from .spec
+8033 INFO: checking Analysis
+8034 INFO: Building Analysis because Analysis-00.toc is non existent
+8034 INFO: Looking for Python shared library...
+8034 INFO: Using Python shared library: Z:\opt\python\python312.dll
+8034 INFO: Running Analysis Analysis-00.toc
+8034 INFO: Target bytecode optimization level: 0
+8034 INFO: Initializing module dependency graph...
+8038 INFO: Initializing module graph hook caches...
+8059 INFO: Analyzing modules for base_library.zip ...
+11284 INFO: Processing standard module hook 'hook-encodings.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+13686 INFO: Processing standard module hook 'hook-pickle.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+14731 INFO: Processing standard module hook 'hook-heapq.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+15325 INFO: Caching module dependency graph...
+15363 INFO: Analyzing Z:\opt\project\desktop_entry.py
+15422 INFO: Processing pre-find-module-path hook 'hook-tkinter.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+15423 INFO: TclTkInfo: initializing cached Tcl/Tk info...
+15896 INFO: Processing standard module hook 'hook-_tkinter.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+15995 INFO: Processing standard module hook 'hook-platform.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+16213 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+16450 INFO: Processing standard module hook 'hook-xml.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+16716 INFO: Processing standard module hook 'hook-_ctypes.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+17135 INFO: Processing standard module hook 'hook-uvicorn.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+18685 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+18690 INFO: SetuptoolsInfo: initializing cached setuptools info...
+20991 INFO: Processing standard module hook 'hook-difflib.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+21497 INFO: Processing standard module hook 'hook-websockets.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+23815 INFO: Processing standard module hook 'hook-certifi.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+24313 INFO: Processing standard module hook 'hook-anyio.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+26362 INFO: Processing standard module hook 'hook-pygments.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+30112 INFO: Processing standard module hook 'hook-PIL.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+30216 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+31211 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+31375 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+31681 INFO: Processing standard module hook 'hook-playwright.async_api.py' from 'Z:\\opt\\python\\Lib\\site-packages\\playwright\\_impl\\__pyinstaller'
+34280 INFO: Processing standard module hook 'hook-pydantic.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+35943 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+35973 INFO: Processing standard module hook 'hook-sysconfig.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+37345 INFO: Processing standard module hook 'hook-cryptography.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+40217 INFO: hook-cryptography: cryptography does not seem to be using dynamically linked OpenSSL.
+40642 INFO: Processing standard module hook 'hook-sqlite3.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+41587 INFO: Analyzing hidden import 'uvicorn.__main__'
+41591 INFO: Analyzing hidden import 'uvicorn.lifespan'
+41594 INFO: Analyzing hidden import 'uvicorn.lifespan.off'
+41599 INFO: Analyzing hidden import 'uvicorn.lifespan.on'
+41610 INFO: Analyzing hidden import 'uvicorn.loops'
+41615 INFO: Analyzing hidden import 'uvicorn.loops.asyncio'
+41620 INFO: Analyzing hidden import 'uvicorn.loops.auto'
+41634 INFO: Analyzing hidden import 'uvicorn.protocols.http.auto'
+41644 INFO: Analyzing hidden import 'uvicorn.protocols.websockets.auto'
+41651 INFO: Analyzing hidden import 'uvicorn.workers'
+41664 INFO: Analyzing hidden import 'playwright.__main__'
+41668 INFO: Analyzing hidden import 'playwright._impl.__pyinstaller'
+41672 INFO: Analyzing hidden import 'playwright._impl._path_utils'
+41676 INFO: Analyzing hidden import 'playwright._impl._sync_base'
+41684 INFO: Analyzing hidden import 'playwright.sync_api'
+41692 INFO: Processing standard module hook 'hook-playwright.sync_api.py' from 'Z:\\opt\\python\\Lib\\site-packages\\playwright\\_impl\\__pyinstaller'
+43593 INFO: Processing module hooks (post-graph stage)...
+43744 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+43994 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+43996 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+44006 INFO: Processing standard module hook 'hook-setuptools.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+44030 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+44091 INFO: Processing pre-safe-import-module hook 'hook-jaraco.functools.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+44093 INFO: Setuptools: 'jaraco.functools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco.functools'!
+44114 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+44116 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
+44255 INFO: Processing standard module hook 'hook-_osx_support.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+44611 INFO: Processing pre-safe-import-module hook 'hook-jaraco.text.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+44614 INFO: Setuptools: 'jaraco.text' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco.text'!
+44625 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+44629 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+44634 INFO: Processing pre-safe-import-module hook 'hook-jaraco.context.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+44636 INFO: Setuptools: 'jaraco.context' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco.context'!
+45739 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+45740 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
+46036 WARNING: Hidden import "tzdata" not found!
+46438 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+50009 INFO: Processing standard module hook 'hook-_tkinter.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+50045 INFO: Performing binary vs. data reclassification (1348 entries)
+51077 INFO: Looking for ctypes DLLs
+51122 INFO: Analyzing run-time hooks ...
+51131 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+51135 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+51142 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+51145 INFO: Including run-time hook 'pyi_rth_cryptography_openssl.py' from 'Z:\\opt\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+51147 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+51150 INFO: Including run-time hook 'pyi_rth__tkinter.py' from 'Z:\\opt\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+51203 INFO: Creating base_library.zip...
+51228 INFO: Looking for dynamic libraries
+55119 INFO: Extra DLL search directories (AddDllDirectory): []
+55120 INFO: Extra DLL search directories (PATH): []
+56269 INFO: Warnings written to Z:\opt\project\build\VanyaBridge\warn-VanyaBridge.txt
+56400 INFO: Graph cross-reference written to Z:\opt\project\build\VanyaBridge\xref-VanyaBridge.html
+56480 INFO: checking PYZ
+56480 INFO: Building PYZ because PYZ-00.toc is non existent
+56480 INFO: Building PYZ (ZlibArchive) Z:\opt\project\build\VanyaBridge\PYZ-00.pyz
+57553 INFO: Building PYZ (ZlibArchive) Z:\opt\project\build\VanyaBridge\PYZ-00.pyz completed successfully.
+57587 INFO: checking PKG
+57588 INFO: Building PKG because PKG-00.toc is non existent
+57588 INFO: Building PKG (CArchive) VanyaBridge.pkg
+57639 INFO: Building PKG (CArchive) VanyaBridge.pkg completed successfully.
+57641 INFO: Bootloader Z:\opt\python\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+57641 INFO: checking EXE
+57641 INFO: Building EXE because EXE-00.toc is non existent
+57641 INFO: Building EXE from EXE-00.toc
+57641 INFO: Copying bootloader EXE to Z:\opt\project\build\VanyaBridge\VanyaBridge.exe
+57647 INFO: Copying icon to EXE
+57651 INFO: Copying 0 resources to EXE
+57652 INFO: Embedding manifest in EXE
+57654 INFO: Appending PKG archive to EXE
+57659 INFO: Fixing EXE headers
+57740 INFO: Building EXE from EXE-00.toc completed successfully.
+57755 INFO: checking COLLECT
+57755 INFO: Building COLLECT because COLLECT-00.toc is non existent
+57756 INFO: Building COLLECT COLLECT-00.toc
+62255 INFO: Building COLLECT COLLECT-00.toc completed successfully.
+62274 INFO: Build complete! The results are available in: Z:\opt\project\dist

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.overlay.OverlayPositionTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-26T05:06:40" hostname="ac7b89ae9c6b" time="0.001">
+  <properties/>
+  <testcase name="draggingPastEdgesRemainsInsideVisibleFrame" classname="com.voiceagent.oneplus13.overlay.OverlayPositionTest" time="0.001"/>
+  <testcase name="alreadyVisiblePanelDoesNotJumpWhenKeyboardAppears" classname="com.voiceagent.oneplus13.overlay.OverlayPositionTest" time="0.0"/>
+  <testcase name="expandingBubbleUsesActualPanelWidth" classname="com.voiceagent.oneplus13.overlay.OverlayPositionTest" time="0.0"/>
+  <testcase name="keyboardMovesPanelOnlyAsFarAsNeeded" classname="com.voiceagent.oneplus13.overlay.OverlayPositionTest" time="0.0"/>
+  <testcase name="hidingKeyboardRestoresRequestedPosition" classname="com.voiceagent.oneplus13.overlay.OverlayPositionTest" time="0.0"/>
+  <testcase name="temporarilyOversizedWindowCannotProduceInvalidRange" classname="com.voiceagent.oneplus13.overlay.OverlayPositionTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

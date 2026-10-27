@@ -1,0 +1,386 @@
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -46,7 +46,8 @@
+         <activity
+             android:name=".MainActivity"
+             android:exported="true"
+-            android:launchMode="singleTop">
++            android:launchMode="singleTop"
++            android:windowSoftInputMode="adjustResize">
+             <intent-filter>
+                 <action android:name="android.intent.action.MAIN" />
+                 <category android:name="android.intent.category.LAUNCHER" />
+--- a/app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
+@@ -195,7 +195,8 @@
+         overlay = OverlayBubbleController(
+             context = applicationContext,
+             scope = uiScope,
+-            onSendText = { text -> scope.launch { orchestrator.handleTranscript(text, "overlay") } }
++            onSendText = { text -> scope.launch { orchestrator.handleTranscript(text, "overlay") } },
++            alwaysVisible = { uiPrefs.overlayAlwaysVisible }
+         ).also {
+             // По умолчанию пузырь появляется только по будильному слову
+             // (flashOnWake из startListeningLoop). Явная настройка "показывать
+--- a/app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayBubbleController.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayBubbleController.kt
+@@ -1,17 +1,21 @@
+ package com.voiceagent.oneplus13.overlay
+ 
+ import android.content.Context
++import android.graphics.Rect
+ import android.graphics.PixelFormat
+ import android.net.Uri
+ import android.os.Build
+ import android.provider.Settings
+ import android.view.Gravity
+ import android.view.WindowManager
++import android.view.ViewTreeObserver
+ import androidx.compose.foundation.gestures.detectDragGestures
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.Spacer
+ import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.heightIn
+ import androidx.compose.runtime.Composable
++import androidx.compose.runtime.DisposableEffect
+ import androidx.compose.runtime.collectAsState
+ import androidx.compose.runtime.getValue
+ import androidx.compose.runtime.mutableStateOf
+@@ -20,7 +24,6 @@
+ import androidx.compose.runtime.snapshots.SnapshotStateList
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+-import androidx.compose.ui.geometry.Offset
+ import androidx.compose.ui.input.pointer.pointerInput
+ import androidx.compose.ui.platform.ComposeView
+ import androidx.compose.ui.platform.LocalDensity
+@@ -59,7 +62,8 @@
+ class OverlayBubbleController(
+     private val context: Context,
+     private val scope: CoroutineScope,
+-    private val onSendText: (String) -> Unit
++    private val onSendText: (String) -> Unit,
++    private val alwaysVisible: () -> Boolean = { false }
+ ) {
+     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+     private var lifecycleOwner: OverlayLifecycleOwner? = null
+@@ -69,6 +73,7 @@
+     private var params: WindowManager.LayoutParams? = null
+     private var eventsJob: Job? = null
+     private var autoHideJob: Job? = null
++    private var panelOpen = false
+ 
+     fun isShowing(): Boolean = composeView != null
+ 
+@@ -85,9 +90,10 @@
+ 
+     private fun scheduleAutoHide() {
+         autoHideJob?.cancel()
++        if (panelOpen || alwaysVisible()) return
+         autoHideJob = scope.launch {
+             delay(AUTO_HIDE_MS)
+-            hide()
++            if (!panelOpen && !alwaysVisible()) hide()
+         }
+     }
+ 
+@@ -110,6 +116,7 @@
+             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+             PixelFormat.TRANSLUCENT
+         ).apply {
++            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+             gravity = Gravity.TOP or Gravity.START
+             x = metrics.widthPixels - bubbleSizePx - (16 * density).roundToInt()
+             y = (metrics.heightPixels * 0.68f).roundToInt()
+@@ -135,7 +142,10 @@
+                         messages.add(ChatMessage(text, isUser = true))
+                         onSendText(text)
+                     },
+-                    onPanelOpenChanged = { open -> if (open) pauseAutoHide() else scheduleAutoHide() }
++                    onPanelOpenChanged = { open ->
++                        panelOpen = open
++                        if (open) pauseAutoHide() else scheduleAutoHide()
++                    }
+                 )
+             }
+         }
+@@ -176,6 +186,7 @@
+     }
+ 
+     fun hide() {
++        panelOpen = false
+         autoHideJob?.cancel()
+         autoHideJob = null
+         eventsJob?.cancel()
+@@ -215,7 +226,7 @@
+  * любое место экрана (позиция двигает реальное окно через
+  * `windowManager.updateViewLayout`, не изображение внутри Compose), и попап
+  * над ней при тапе — тот же [WindowsCornerPopup], что и в Windows-режиме
+- * приложения. Короткое перетаскивание (меньше 8dp) считается тапом.
++ * приложения. Clickable обрабатывает тап, drag detector — только перетаскивание.
+  */
+ @Composable
+ private fun BubbleContent(
+@@ -232,7 +243,37 @@
+     val phase = rememberAgentPhase(running = true, status = statusText)
+     val isListening = phase == AgentPhase.LISTENING || phase == AgentPhase.THINKING
+     val density = LocalDensity.current
+-    val tapThresholdPx = with(density) { 8.dp.toPx() }
++    // Keep the user's requested position separate from temporary IME clamping.
++    var preferredX by remember { mutableStateOf(params.x) }
++    var preferredY by remember { mutableStateOf(params.y) }
++    var availableHeightPx by remember { mutableStateOf(view.resources.displayMetrics.heightPixels) }
++    val visibleFrame = remember { Rect() }
++
++    fun fitToVisibleFrame() {
++        view.getWindowVisibleDisplayFrame(visibleFrame)
++        if (visibleFrame.width() <= 0 || visibleFrame.height() <= 0) return
++        availableHeightPx = visibleFrame.height()
++        val position = fitOverlayPosition(
++            preferredX, preferredY, view.width, view.height,
++            visibleFrame.left, visibleFrame.top, visibleFrame.right, visibleFrame.bottom
++        )
++        if (params.x != position.x || params.y != position.y) {
++            params.x = position.x
++            params.y = position.y
++            runCatching { windowManager.updateViewLayout(view, params) }
++        }
++    }
++
++    DisposableEffect(view) {
++        val listener = ViewTreeObserver.OnGlobalLayoutListener { fitToVisibleFrame() }
++        val initial = Runnable { fitToVisibleFrame() }
++        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
++        view.post(initial)
++        onDispose {
++            view.removeCallbacks(initial)
++            if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnGlobalLayoutListener(listener)
++        }
++    }
+ 
+     fun applyFocusable(focusable: Boolean) {
+         params.flags = if (focusable) {
+@@ -245,29 +286,35 @@
+ 
+     fun snapToNearestEdge() {
+         val metrics = view.resources.displayMetrics
+-        val bubbleWidthPx = (64 * metrics.density).roundToInt()
+         val margin = (12 * metrics.density).roundToInt()
+-        params.x = if (params.x + bubbleWidthPx / 2 < metrics.widthPixels / 2) {
++        preferredX = if (params.x + view.width / 2 < metrics.widthPixels / 2) {
+             margin
+         } else {
+-            metrics.widthPixels - bubbleWidthPx - margin
+-        }
+-        runCatching { windowManager.updateViewLayout(view, params) }
+-    }
+-
+-    Column(horizontalAlignment = Alignment.End) {
++            metrics.widthPixels - view.width - margin
++        }
++        preferredY = params.y
++        fitToVisibleFrame()
++    }
++
++    fun setPanelVisible(visible: Boolean) {
++        panelVisible = visible
++        applyFocusable(visible)
++        onPanelOpenChanged(visible)
++    }
++
++    Column(
++        modifier = Modifier.heightIn(max = with(density) { availableHeightPx.toDp() }),
++        horizontalAlignment = Alignment.End
++    ) {
+         WindowsCornerPopup(
+             isVisible = panelVisible,
+             isListening = isListening,
+             messages = messages,
+             quickPrompts = QUICK_PROMPTS,
+-            onDismiss = {
+-                panelVisible = false
+-                applyFocusable(false)
+-                onPanelOpenChanged(false)
+-            },
++            onDismiss = { setPanelVisible(false) },
+             onSend = onSend,
+-            onQuickPrompt = onSend
++            onQuickPrompt = onSend,
++            modifier = Modifier.weight(1f, fill = false)
+         )
+ 
+         if (panelVisible) {
+@@ -276,31 +323,20 @@
+ 
+         androidx.compose.foundation.layout.Box(
+             modifier = Modifier.pointerInput(Unit) {
+-                var totalDrag = Offset.Zero
+                 detectDragGestures(
+-                    onDragStart = { totalDrag = Offset.Zero },
+-                    onDragEnd = {
+-                        if (totalDrag.getDistance() < tapThresholdPx) {
+-                            panelVisible = !panelVisible
+-                            applyFocusable(panelVisible)
+-                            onPanelOpenChanged(panelVisible)
+-                        } else {
+-                            snapToNearestEdge()
+-                        }
+-                    },
+-                    onDragCancel = { }
++                    onDragEnd = { snapToNearestEdge() }
+                 ) { change, dragAmount ->
+                     change.consume()
+-                    totalDrag += dragAmount
+-                    params.x += dragAmount.x.roundToInt()
+-                    params.y += dragAmount.y.roundToInt()
+-                    runCatching { windowManager.updateViewLayout(view, params) }
++                    preferredX = params.x + dragAmount.x.roundToInt()
++                    preferredY = params.y + dragAmount.y.roundToInt()
++                    fitToVisibleFrame()
+                 }
+             }
+         ) {
+-            // onClick пустой: тап отдельно распознаётся выше как короткое перетаскивание,
+-            // чтобы драг и тап не конфликтовали за один и тот же поток жестов.
+-            FloatingSparkButton(isListening = isListening, size = 56.dp, onClick = {})
++            // detectDragGestures consumes movement after touch slop; an ordinary tap
++            // must reach clickable (onDragEnd is not called for a stationary tap).
++            FloatingSparkButton(isListening = isListening, size = 56.dp,
++                onClick = { setPanelVisible(!panelVisible) })
+         }
+     }
+ }
+--- /dev/null
++++ b/app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayPosition.kt
+@@ -0,0 +1,14 @@
++package com.voiceagent.oneplus13.overlay
++
++internal data class OverlayPosition(val x: Int, val y: Int)
++
++/** Fit the measured window to the visible display frame (already excludes the IME).
++ * Never subtract keyboard height twice or overwrite the user's preferred drag position.
++ */
++internal fun fitOverlayPosition(
++    preferredX: Int, preferredY: Int, width: Int, height: Int,
++    left: Int, top: Int, right: Int, bottom: Int
++): OverlayPosition = OverlayPosition(
++    preferredX.coerceIn(left, maxOf(left, right - width.coerceAtLeast(0))),
++    preferredY.coerceIn(top, maxOf(top, bottom - height.coerceAtLeast(0)))
++)
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
+@@ -42,6 +42,7 @@
+ import androidx.compose.runtime.getValue
+ import androidx.compose.runtime.mutableStateOf
+ import androidx.compose.runtime.remember
++import androidx.compose.runtime.saveable.rememberSaveable
+ import androidx.compose.runtime.setValue
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+@@ -394,7 +395,7 @@
+     canSubmit: () -> Boolean = { true }
+ ) {
+     val cs = MaterialTheme.colorScheme
+-    var input by remember { mutableStateOf("") }
++    var input by rememberSaveable { mutableStateOf("") }
+     val canSend = input.isNotBlank()
+     val shape = RoundedCornerShape(28.dp)
+ 
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt
+@@ -162,7 +162,9 @@
+     val toggleAgent: () -> Unit = { if (controls.isAgentRunning) controls.onStopAgent() else controls.onStartAgent() }
+     val openSettings = { settingsVisible = true }
+ 
+-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
++    // One IME inset owner for the whole chat layout. The list gives up space,
++    // rather than making the focused Composer itself keyboard-height tall.
++    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()) {
+         AmbientGlow()
+ 
+         when (formFactor) {
+@@ -276,7 +278,6 @@
+             modifier = Modifier
+                 .padding(horizontal = 12.dp, vertical = 8.dp)
+                 .navigationBarsPadding()
+-                .imePadding()
+         )
+     }
+ }
+@@ -365,7 +366,8 @@
+                 onDismiss = onDismiss,
+                 onSend = onSend,
+                 canSubmit = canSubmit,
+-                onQuickPrompt = onSend
++                onQuickPrompt = onSend,
++                modifier = Modifier.weight(1f, fill = false)
+             )
+             Spacer(Modifier.height(14.dp))
+             FloatingSparkButton(
+--- a/app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt
+@@ -6,6 +6,8 @@
+ import androidx.compose.animation.fadeOut
+ import androidx.compose.animation.scaleIn
+ import androidx.compose.animation.scaleOut
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.verticalScroll
+ import androidx.compose.foundation.BorderStroke
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Box
+@@ -73,7 +75,7 @@
+                 PopupHeader(isListening = isListening, onDismiss = onDismiss)
+ 
+                 if (messages.isEmpty()) {
+-                    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
++                    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+                         Text(stringResource(R.string.assistant_greeting), style = MaterialTheme.typography.titleLarge)
+                         Spacer(Modifier.size(6.dp))
+                         Text(
+@@ -86,7 +88,7 @@
+                     MessageList(
+                         messages = messages,
+                         compact = true,
+-                        modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
++                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 300.dp),
+                         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+                     )
+                 }
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/overlay/OverlayPositionTest.kt
+@@ -0,0 +1,35 @@
++package com.voiceagent.oneplus13.overlay
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class OverlayPositionTest {
++    @Test fun keyboardMovesPanelOnlyAsFarAsNeeded() {
++        val p = fitOverlayPosition(900, 1500, 900, 800, 0, 80, 1440, 1800)
++        assertEquals(OverlayPosition(540, 1000), p)
++        assertEquals(1800, p.y + 800) // bottom flush with the available frame, no second IME gap
++    }
++    @Test fun hidingKeyboardRestoresRequestedPosition() {
++        val requestedY = 1500
++        val open = fitOverlayPosition(100, requestedY, 900, 800, 0, 80, 1440, 1800)
++        val closed = fitOverlayPosition(100, requestedY, 900, 800, 0, 80, 1440, 3100)
++        assertEquals(1000, open.y)
++        assertEquals(requestedY, closed.y)
++    }
++    @Test fun alreadyVisiblePanelDoesNotJumpWhenKeyboardAppears() {
++        assertEquals(OverlayPosition(100, 200), fitOverlayPosition(100, 200, 900, 800, 0, 80, 1440, 1800))
++    }
++    @Test fun expandingBubbleUsesActualPanelWidth() {
++        val bubble = fitOverlayPosition(1250, 500, 150, 150, 0, 80, 1440, 3100)
++        val panel = fitOverlayPosition(1250, 500, 900, 800, 0, 80, 1440, 3100)
++        assertEquals(1250, bubble.x)
++        assertEquals(540, panel.x)
++    }
++    @Test fun temporarilyOversizedWindowCannotProduceInvalidRange() {
++        assertEquals(OverlayPosition(20, 80), fitOverlayPosition(-100, -200, 3000, 4000, 20, 80, 1440, 1800))
++    }
++    @Test fun draggingPastEdgesRemainsInsideVisibleFrame() {
++        assertEquals(OverlayPosition(20, 80), fitOverlayPosition(-100, -200, 500, 700, 20, 80, 1440, 1800))
++        assertEquals(OverlayPosition(940, 1100), fitOverlayPosition(9000, 9000, 500, 700, 20, 80, 1440, 1800))
++    }
++}

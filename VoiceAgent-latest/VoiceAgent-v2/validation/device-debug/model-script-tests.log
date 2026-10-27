@@ -1,0 +1,8 @@
+test_http_failure_preserves_existing_model (test_vosk_download.ModelDownloadTest.test_http_failure_preserves_existing_model) ... ok
+test_incomplete_archive_preserves_existing_model (test_vosk_download.ModelDownloadTest.test_incomplete_archive_preserves_existing_model) ... ok
+test_structurally_complete_fixture_installs_without_extra_nesting (test_vosk_download.ModelDownloadTest.test_structurally_complete_fixture_installs_without_extra_nesting) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.097s
+
+OK

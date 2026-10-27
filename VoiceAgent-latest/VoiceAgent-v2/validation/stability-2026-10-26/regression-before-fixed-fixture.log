@@ -1,0 +1,103 @@
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Checking the license for package Android SDK Platform-Tools in /workspace/voiceagent-tools/android-sdk/licenses
+Warning: License for package Android SDK Platform-Tools not accepted.
+WARNING: platform-tools package is not installed. Please accept the installation licence to continue
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:genVoskUuid
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :core:ai-engines:preBuild UP-TO-DATE
+> Task :core:ai-engines:preDebugBuild UP-TO-DATE
+> Task :core:ai-engines:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :core:ai-engines:generateDebugResValues UP-TO-DATE
+> Task :core:ai-engines:generateDebugResources UP-TO-DATE
+> Task :core:ai-engines:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :core:ai-engines:extractDeepLinksDebug UP-TO-DATE
+> Task :core:ai-engines:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :core:ai-engines:compileDebugLibraryResources UP-TO-DATE
+> Task :core:ai-engines:parseDebugLocalResources UP-TO-DATE
+> Task :core:ai-engines:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :core:ai-engines:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:ai-engines:generateDebugBuildConfig UP-TO-DATE
+> Task :core:ai-engines:compileDebugKotlin UP-TO-DATE
+> Task :core:ai-engines:javaPreCompileDebug UP-TO-DATE
+> Task :core:ai-engines:compileDebugJavaWithJavac UP-TO-DATE
+> Task :core:ai-engines:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:preDebugUnitTestBuild
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :core:ai-engines:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:ai-engines:processDebugJavaRes UP-TO-DATE
+
+> Task :app:compileDebugUnitTestKotlin
+e: The daemon has terminated unexpectedly on startup attempt #1 with error code: 0. The daemon process output:
+    1. Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+    2. Kotlin compile daemon is ready
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :app:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+
+AgentOrchestratorRouteTest > closedAgentDropsLateScreenDescription FAILED
+    org.mockito.exceptions.verification.NoInteractionsWanted at AgentOrchestratorRouteTest.kt:143
+
+AgentOrchestratorRouteTest > cancelledActionDropsLateScreenIdentification FAILED
+    org.mockito.exceptions.verification.NoInteractionsWanted at AgentOrchestratorRouteTest.kt:143
+
+AgentOrchestratorRouteTest > closedAgentDoesNotSpeakLateTransportFailure FAILED
+    org.mockito.exceptions.verification.NoInteractionsWanted at AgentOrchestratorRouteTest.kt:163
+
+AgentOrchestratorRouteTest > closedAgentDoesNotSaveLateGeneratedProject FAILED
+    java.lang.AssertionError at AgentOrchestratorRouteTest.kt:144
+
+AgentOrchestratorRouteTest > closedAgentDoesNotSaveLateNotes FAILED
+    org.mockito.exceptions.verification.NoInteractionsWanted at AgentOrchestratorRouteTest.kt:143
+
+ChatsDigestTest > networkFailureDoesNotConsumeNotifications FAILED
+    org.junit.ComparisonFailure at ChatsDigestTest.kt:26
+
+ChatsDigestTest > cancellationDoesNotConsumeNotifications FAILED
+    org.junit.ComparisonFailure at ChatsDigestTest.kt:41
+
+ChatsDigestTest > successfulSummaryAcknowledgesOnlyItsSnapshot FAILED
+    org.junit.ComparisonFailure at ChatsDigestTest.kt:53
+
+20 tests completed, 8 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///workspace/voiceagent-fix/VoiceAgent-v2/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 21s
+41 actionable tasks: 3 executed, 38 up-to-date

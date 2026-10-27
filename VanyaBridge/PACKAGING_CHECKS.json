@@ -1,0 +1,11 @@
+{
+  "project": "VanyaBridge",
+  "version": "0.1.0-mvp",
+  "apk_included": true,
+  "windows_exe_included": false,
+  "voiceagent_modified": false,
+  "backend_tests_passed": 45,
+  "android_jvm_tests_passed": 4,
+  "device_tests_performed": false,
+  "private_identity_included": false
+}

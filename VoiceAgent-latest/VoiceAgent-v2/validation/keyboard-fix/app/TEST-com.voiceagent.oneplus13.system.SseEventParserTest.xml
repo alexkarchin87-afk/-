@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.system.SseEventParserTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-26T05:06:40" hostname="ac7b89ae9c6b" time="0.024">
+  <properties/>
+  <testcase name="boundsResponseSize" classname="com.voiceagent.oneplus13.system.SseEventParserTest" time="0.022"/>
+  <testcase name="doneTerminatesAndRejectsLaterText" classname="com.voiceagent.oneplus13.system.SseEventParserTest" time="0.0"/>
+  <testcase name="terminalRequiredEvenAfterText" classname="com.voiceagent.oneplus13.system.SseEventParserTest" time="0.001"/>
+  <testcase name="upstreamErrorFails" classname="com.voiceagent.oneplus13.system.SseEventParserTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

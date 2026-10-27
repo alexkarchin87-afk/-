@@ -1,0 +1,9 @@
+{
+  "baseline_sha256": "0ced73106cb625de785e7997ecb685b44ecbdf62bac965f16fe73430a9063317",
+  "code_files_changed_or_added": 20,
+  "baseline_source_files_removed": 0,
+  "patch_apply_and_byte_compare": "PASS",
+  "new_apk_included": false,
+  "model_included": false,
+  "zip_crc": "verified after archive creation"
+}

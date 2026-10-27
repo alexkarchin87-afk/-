@@ -1,0 +1,10 @@
+{
+  "apk": "VoiceAgent-v2-OnePlus13-debug.apk",
+  "bytes": 28292230,
+  "sha256": "495ced1b5046e5195f754a448ffc1f6a3576f6ddb28e0e75ea7a84503db23820",
+  "android_installed_or_run": false,
+  "vosk_model_included": false,
+  "gradle_exit": 0,
+  "jvm_tests": 102,
+  "backend_tests": 14
+}

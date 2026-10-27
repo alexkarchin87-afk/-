@@ -1,0 +1,89 @@
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Checking the license for package Android SDK Platform-Tools in /workspace/voiceagent-tools/android-sdk/licenses
+Warning: License for package Android SDK Platform-Tools not accepted.
+WARNING: platform-tools package is not installed. Please accept the installation licence to continue
+> Task :app:genVoskUuid
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :core:ai-engines:preBuild UP-TO-DATE
+> Task :core:ai-engines:preDebugBuild UP-TO-DATE
+> Task :core:ai-engines:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :core:ai-engines:generateDebugResValues UP-TO-DATE
+> Task :core:ai-engines:generateDebugResources UP-TO-DATE
+> Task :core:ai-engines:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :core:ai-engines:extractDeepLinksDebug UP-TO-DATE
+> Task :core:ai-engines:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :core:ai-engines:compileDebugLibraryResources UP-TO-DATE
+> Task :core:ai-engines:parseDebugLocalResources UP-TO-DATE
+> Task :core:ai-engines:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :core:ai-engines:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:ai-engines:generateDebugBuildConfig UP-TO-DATE
+> Task :core:ai-engines:compileDebugKotlin UP-TO-DATE
+> Task :core:ai-engines:javaPreCompileDebug UP-TO-DATE
+> Task :core:ai-engines:compileDebugJavaWithJavac UP-TO-DATE
+> Task :core:ai-engines:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :core:ai-engines:mergeDebugShaders UP-TO-DATE
+> Task :core:ai-engines:compileDebugShaders NO-SOURCE
+> Task :core:ai-engines:generateDebugAssets UP-TO-DATE
+> Task :core:ai-engines:packageDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :core:ai-engines:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :core:ai-engines:processDebugJavaRes UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :core:ai-engines:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeDebugJavaResource
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :core:ai-engines:mergeDebugJniLibFolders UP-TO-DATE
+> Task :core:ai-engines:mergeDebugNativeLibs NO-SOURCE
+> Task :core:ai-engines:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:verifyVoskModel FAILED
+> Task :app:mergeProjectDexDebug
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:verifyVoskModel'.
+> Vosk model missing/incomplete in app/src/main/assets/model-ru-small: uuid, am/final.mdl, conf/mfcc.conf, graph/FST. Run sh scripts/download_vosk_model.sh, then rebuild.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 14s
+56 actionable tasks: 5 executed, 51 up-to-date

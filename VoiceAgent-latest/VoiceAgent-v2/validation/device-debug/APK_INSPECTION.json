@@ -1,0 +1,12 @@
+{
+  "artifact": "Previous VoiceAgent-v2-OnePlus13-debug.apk, NOT a new build",
+  "bytes": 28292230,
+  "sha256": "495ced1b5046e5195f754a448ffc1f6a3576f6ddb28e0e75ea7a84503db23820",
+  "model_entries": [],
+  "vosk_native_entries": [
+    "lib/arm64-v8a/libvosk.so",
+    "lib/armeabi-v7a/libvosk.so",
+    "lib/x86/libvosk.so",
+    "lib/x86_64/libvosk.so"
+  ]
+}

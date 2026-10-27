@@ -1,0 +1,4 @@
+Tool: download_file
+file_id: file_00000000fd54821194e9599625e35156
+Result: file exceeds the executor transfer limit of 32 MiB
+Actual byte size: UNKNOWN (no file/metadata returned)

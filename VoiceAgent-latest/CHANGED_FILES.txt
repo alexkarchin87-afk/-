@@ -1,0 +1,12 @@
+Изменения кода/конфигурации/тестов относительно VoiceAgent-v2-PROJECT-FOR-APK.zip:
+.gitignore
+app/src/main/java/com/voiceagent/oneplus13/system/ChatsDigest.kt
+app/src/main/java/com/voiceagent/oneplus13/system/DigestBatch.kt
+app/src/main/java/com/voiceagent/oneplus13/system/NotificationBuffer.kt
+app/src/test/java/com/voiceagent/oneplus13/system/ChatsDigestTest.kt
+app/src/test/java/com/voiceagent/oneplus13/system/DigestBatchTest.kt
+app/src/test/java/com/voiceagent/oneplus13/system/NotificationBufferTest.kt
+scripts/download_vosk_model.ps1
+scripts/tests/test_vosk_model.ps1
+
+Документы: FIX_REPORT.md, TEST_RESULTS.md, BUILD_GUIDE_RU.md, MODEL_UPLOAD.md, PRESERVATION_TEST.md, CHANGED_FILES.txt, PRESERVATION_FIX.patch, PACKAGING_CHECKS.json. История и доказательства: validation/.

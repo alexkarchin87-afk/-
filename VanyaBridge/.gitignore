@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.db*
+*.pem
+!android/app/src/test/resources/certificate.pem
+.gradle/
+local.properties
+build/
+dist/
+*.spec

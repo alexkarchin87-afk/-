@@ -1,0 +1,431 @@
+--- a/.gitignore
++++ b/.gitignore
+@@ -13,3 +13,8 @@
+ /.kotlin
+ __pycache__/
+ app/src/main/assets/model-*/
++
++# Local model installer recovery files (never APK assets).
++/.model-backups/
++/.model-stage-*/
++/.vosk-install.lock
+--- a/app/src/main/java/com/voiceagent/oneplus13/system/ChatsDigest.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/system/ChatsDigest.kt
+@@ -5,6 +5,8 @@
+ import com.voiceagent.oneplus13.core.LLMClient
+ import kotlinx.coroutines.currentCoroutineContext
+ import kotlinx.coroutines.ensureActive
++import kotlinx.coroutines.sync.Mutex
++import kotlinx.coroutines.sync.withLock
+ 
+ /**
+  * "Всеядный штурман уведомлений" — на "что нового?"/"прочитай уведомления"
+@@ -14,7 +16,8 @@
+  */
+ class ChatsDigest(private val context: Context, private val llm: LLMClient) {
+ 
+-    private var lastDigestAtMillis: Long = 0L
++    private val digestLock = Mutex()
++    private var progress = DigestProgress()
+ 
+     private val prompt = """
+         Тебе дан список уведомлений из шторки телефона подростка (Telegram,
+@@ -27,20 +30,18 @@
+         ничего важного".
+     """.trimIndent()
+ 
+-    suspend fun summarizeSinceLastDigest(): String {
+-        val entries = NotificationBuffer.entriesSince(lastDigestAtMillis)
+-        if (entries.isEmpty()) return "Новых уведомлений с прошлого раза нет."
++    suspend fun summarizeSinceLastDigest(): String = digestLock.withLock {
++        val records = NotificationBuffer.recordsAfter(progress.completedThrough)
++        val batch = prepareDigestBatch(records, progress, MAX_DIGEST_INPUT_CHARS) { e ->
++            "${friendlyAppName(e.packageName)}: ${e.title} — ${e.text}"
++        } ?: return@withLock "Новых уведомлений с прошлого раза нет."
+ 
+-        val formatted = entries.joinToString("\n") { e ->
+-            "${friendlyAppName(e.packageName)}: ${e.title} — ${e.text}"
+-        }.take(MAX_DIGEST_INPUT_CHARS)
+-
+-        val summary = llm.complete(prompt, emptyList(), formatted)
++        val summary = llm.complete(prompt, emptyList(), batch.text)
+         currentCoroutineContext().ensureActive()
+-        // A failed/cancelled request must not consume its input. Acknowledge the snapshot,
+-        // not wall-clock time: notifications arriving during the request remain eligible.
+-        lastDigestAtMillis = entries.maxOf { it.timestampMillis }
+-        return summary
++        // Commit only the characters included in this successful request. The rest
++        // stays available for a later user request; failures leave progress unchanged.
++        progress = batch.next
++        summary
+     }
+ 
+     private fun friendlyAppName(packageName: String): String = try {
+--- /dev/null
++++ b/app/src/main/java/com/voiceagent/oneplus13/system/DigestBatch.kt
+@@ -0,0 +1,40 @@
++package com.voiceagent.oneplus13.system
++
++internal data class DigestProgress(
++    val completedThrough: Long = 0,
++    val partialSequence: Long? = null,
++    val partialChars: Int = 0
++)
++
++internal data class DigestBatch(val text: String, val next: DigestProgress)
++
++/** A bounded request plus its proposed checkpoint; never consumes unsubmitted text. */
++internal fun prepareDigestBatch(
++    records: List<RecordedNotification>,
++    progress: DigestProgress,
++    maxChars: Int,
++    format: (NotificationEntry) -> String
++): DigestBatch? {
++    require(maxChars >= 2)
++    val text = StringBuilder()
++    var next = progress
++    for (record in records) {
++        if (record.sequence <= progress.completedThrough) continue
++        val formatted = format(record.entry)
++        val start = if (record.sequence == progress.partialSequence)
++            progress.partialChars.coerceIn(0, formatted.length) else 0
++        val separator = if (text.isEmpty()) "" else "\n"
++        val room = maxChars - text.length - separator.length
++        if (room <= 0) break
++        var end = start + minOf(room, formatted.length - start)
++        // Do not split a surrogate pair when the budget ends in the middle of an emoji.
++        if (end < formatted.length && end > start && formatted[end - 1].isHighSurrogate() &&
++            formatted[end].isLowSurrogate()) end--
++        if (end == start && start < formatted.length) break
++        text.append(separator).append(formatted, start, end)
++        next = if (end == formatted.length) DigestProgress(completedThrough = record.sequence)
++        else DigestProgress(next.completedThrough, record.sequence, end)
++        if (end < formatted.length) break
++    }
++    return if (text.isEmpty()) null else DigestBatch(text.toString(), next)
++}
+--- a/app/src/main/java/com/voiceagent/oneplus13/system/NotificationBuffer.kt
++++ b/app/src/main/java/com/voiceagent/oneplus13/system/NotificationBuffer.kt
+@@ -15,17 +15,25 @@
+  * до этого буфера каждое уведомление публиковалось в AgentEventBus по
+  * отдельности и тут же терялось, если никто не слушал именно в этот момент.
+  */
++internal data class RecordedNotification(val sequence: Long, val entry: NotificationEntry)
++
+ object NotificationBuffer {
+     private const val MAX_ENTRIES = 200
+-    private val entries = ArrayDeque<NotificationEntry>()
++    private val entries = ArrayDeque<RecordedNotification>()
++    private var sequence = 0L
+ 
+     @Synchronized
+     fun record(entry: NotificationEntry) {
+-        entries.addLast(entry)
++        entries.addLast(RecordedNotification(++sequence, entry))
+         while (entries.size > MAX_ENTRIES) entries.removeFirst()
+     }
+ 
+     @Synchronized
+     fun entriesSince(timestampMillis: Long): List<NotificationEntry> =
+-        entries.filter { it.timestampMillis > timestampMillis }
++        entries.map { it.entry }.filter { it.timestampMillis > timestampMillis }
++
++    /** Arrival order is independent of equal timestamps and wall-clock changes. */
++    @Synchronized
++    internal fun recordsAfter(completedSequence: Long): List<RecordedNotification> =
++        entries.filter { it.sequence > completedSequence }
+ }
+--- a/app/src/test/java/com/voiceagent/oneplus13/system/ChatsDigestTest.kt
++++ b/app/src/test/java/com/voiceagent/oneplus13/system/ChatsDigestTest.kt
+@@ -55,7 +55,7 @@
+         doAnswer { inv ->
+             calls++
+             if (calls == 1) {
+-                NotificationBuffer.record(NotificationEntry("fixture", "", "arrived during request", 2))
++                NotificationBuffer.record(NotificationEntry("fixture", "", "arrived during request", 1))
+             } else assertTrue(inv.getArgument<String>(2).contains("arrived during request"))
+             "summary"
+         }.`when`(llm).complete(anyString(), anyList(), anyString(), anyBoolean())
+@@ -65,4 +65,63 @@
+         assertEquals("Новых уведомлений с прошлого раза нет.", digest.summarizeSinceLastDigest())
+         assertEquals(2, calls)
+     }
++
++    @Test fun equalAndEarlierTimestampsAreStillNewNotifications() = runTest {
++        val inputs = mutableListOf<String>()
++        doAnswer { inv -> inputs += inv.getArgument<String>(2); "summary" }
++            .`when`(llm).complete(anyString(), anyList(), anyString(), anyBoolean())
++        val digest = ChatsDigest(context, llm)
++        digest.summarizeSinceLastDigest(); inputs.clear()
++        NotificationBuffer.record(NotificationEntry("fixture", "", "same timestamp", 1))
++        NotificationBuffer.record(NotificationEntry("fixture", "", "clock moved back", 0))
++        assertEquals("summary", digest.summarizeSinceLastDigest())
++        assertTrue(inputs.single().contains("same timestamp"))
++        assertTrue(inputs.single().contains("clock moved back"))
++    }
++    @Test fun longNotificationTailRemainsAvailableWithoutExceedingBudget() = runTest {
++        val inputs = mutableListOf<String>()
++        doAnswer { inv -> inputs += inv.getArgument<String>(2); "summary" }
++            .`when`(llm).complete(anyString(), anyList(), anyString(), anyBoolean())
++        val digest = ChatsDigest(context, llm)
++        digest.summarizeSinceLastDigest(); inputs.clear()
++        val text = "A".repeat(4500) + " tail"
++        NotificationBuffer.record(NotificationEntry("fixture", "title", text, 2))
++        assertEquals("summary", digest.summarizeSinceLastDigest())
++        assertEquals("summary", digest.summarizeSinceLastDigest())
++        assertTrue(inputs.all { it.length <= 4000 })
++        assertEquals("fixture: title — " + text, inputs.joinToString(""))
++        assertEquals("Новых уведомлений с прошлого раза нет.", digest.summarizeSinceLastDigest())
++    }
++    @Test fun failedContinuationRetriesTheSameUnconsumedText() = runTest {
++        val inputs = mutableListOf<String>()
++        var failNext = false
++        doAnswer { inv ->
++            inputs += inv.getArgument<String>(2)
++            if (failNext) { failNext = false; throw java.io.IOException("synthetic offline") }
++            "summary"
++        }.`when`(llm).complete(anyString(), anyList(), anyString(), anyBoolean())
++        val digest = ChatsDigest(context, llm)
++        digest.summarizeSinceLastDigest(); inputs.clear()
++        NotificationBuffer.record(NotificationEntry("fixture", "", "B".repeat(5000), 2))
++        digest.summarizeSinceLastDigest()
++        failNext = true
++        try { digest.summarizeSinceLastDigest(); fail("Expected retryable error") }
++        catch (_: java.io.IOException) { }
++        assertEquals("summary", digest.summarizeSinceLastDigest())
++        assertEquals(3, inputs.size)
++        assertEquals(inputs[1], inputs[2])
++    }
++    @Test fun notificationsBeyondTheFirstInputBudgetAreNotAcknowledged() = runTest {
++        val inputs = mutableListOf<String>()
++        doAnswer { inv -> inputs += inv.getArgument<String>(2); "summary" }
++            .`when`(llm).complete(anyString(), anyList(), anyString(), anyBoolean())
++        val digest = ChatsDigest(context, llm)
++        digest.summarizeSinceLastDigest(); inputs.clear()
++        NotificationBuffer.record(NotificationEntry("fixture", "", "C".repeat(3990), 2))
++        NotificationBuffer.record(NotificationEntry("fixture", "", "later notification", 2))
++        digest.summarizeSinceLastDigest()
++        assertEquals("summary", digest.summarizeSinceLastDigest())
++        assertTrue(inputs.last().contains("later notification"))
++        assertTrue(inputs.all { it.length <= 4000 })
++    }
+ }
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/system/DigestBatchTest.kt
+@@ -0,0 +1,35 @@
++package com.voiceagent.oneplus13.system
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class DigestBatchTest {
++    private fun record(id: Long, text: String) = RecordedNotification(id, NotificationEntry("", "", text, 0))
++    @Test fun partialNotificationCanBeReassembledWithoutLostCharacters() {
++        val record = record(1, "1234567890")
++        val first = prepareDigestBatch(listOf(record), DigestProgress(), 6) { it.text }!!
++        val second = prepareDigestBatch(listOf(record), first.next, 6) { it.text }!!
++        assertEquals("1234567890", first.text + second.text)
++        assertEquals(DigestProgress(completedThrough = 1), second.next)
++    }
++    @Test fun emojiAtBoundaryRemainsAWholeSurrogatePair() {
++        val record = record(1, "12345😀tail")
++        val first = prepareDigestBatch(listOf(record), DigestProgress(), 6) { it.text }!!
++        val second = prepareDigestBatch(listOf(record), first.next, 6) { it.text }!!
++        assertEquals("12345", first.text)
++        assertEquals("😀tail", second.text)
++        assertEquals(record.entry.text, first.text + second.text)
++    }
++    @Test fun evictedPartialEntryDoesNotSkipPrefixOfNewEntry() {
++        val progress = DigestProgress(completedThrough = 1, partialSequence = 2, partialChars = 4)
++        val next = prepareDigestBatch(listOf(record(3, "whole new message")), progress, 40) { it.text }!!
++        assertEquals("whole new message", next.text)
++        assertEquals(3L, next.next.completedThrough)
++    }
++    @Test fun exactBudgetDoesNotAcknowledgeTheNextNotification() {
++        val records = listOf(record(1, "123456"), record(2, "next"))
++        val first = prepareDigestBatch(records, DigestProgress(), 6) { it.text }!!
++        assertEquals(1L, first.next.completedThrough)
++        assertEquals("next", prepareDigestBatch(records, first.next, 6) { it.text }!!.text)
++    }
++}
+--- /dev/null
++++ b/app/src/test/java/com/voiceagent/oneplus13/system/NotificationBufferTest.kt
+@@ -0,0 +1,28 @@
++package com.voiceagent.oneplus13.system
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class NotificationBufferTest {
++    @Test fun legacyTimestampQueryKeepsItsContract() {
++        val boundary = Long.MAX_VALUE - 10
++        val excluded = NotificationEntry("fixture", "", "at boundary", boundary)
++        val included = NotificationEntry("fixture", "", "after boundary", boundary + 1)
++        NotificationBuffer.record(excluded)
++        NotificationBuffer.record(included)
++        assertEquals(listOf(included), NotificationBuffer.entriesSince(boundary))
++    }
++    @Test fun newCursorTracksArrivalOrderDespiteEqualOrEarlierClock() {
++        val previous = NotificationBuffer.recordsAfter(0).lastOrNull()?.sequence ?: 0L
++        val entries = listOf(
++            NotificationEntry("fixture", "", "first", 10),
++            NotificationEntry("fixture", "", "same time", 10),
++            NotificationEntry("fixture", "", "clock back", 0)
++        )
++        entries.forEach(NotificationBuffer::record)
++        val records = NotificationBuffer.recordsAfter(previous)
++        assertEquals(entries, records.map { it.entry })
++        assertTrue(records.zipWithNext().all { (a, b) -> a.sequence < b.sequence })
++        assertEquals(listOf(entries.last()), NotificationBuffer.recordsAfter(records[1].sequence).map { it.entry })
++    }
++}
+--- a/scripts/download_vosk_model.ps1
++++ b/scripts/download_vosk_model.ps1
+@@ -1,16 +1,81 @@
+-# Скачивает русскую small-модель Vosk в app/src/main/assets/model-ru-small и создаёт файл uuid.
+-# Запуск (PowerShell, из любой папки):  powershell -ExecutionPolicy Bypass -File scripts\download_vosk_model.ps1
++# Downloads the existing model, or installs the user's local ZIP without a network request.
++# Example: powershell -File scripts\download_vosk_model.ps1 -ModelZip 'C:\Downloads\vosk-model-small-ru-0.22 (1).zip'
++param([string]$ModelZip = "")
+ $ErrorActionPreference = "Stop"
+ $root = Split-Path -Parent $PSScriptRoot
+ $dest = Join-Path $root "app\src\main\assets\model-ru-small"
+-$zip  = Join-Path $env:TEMP "vosk-model-small-ru-0.22.zip"
+-$tmp  = Join-Path $env:TEMP "vosk-model-small-ru-unpack"
++$id = [guid]::NewGuid().ToString()
++$workPath = Join-Path ([IO.Path]::GetTempPath()) ("voiceagent-vosk-" + $id)
++$stage = Join-Path $root (".model-stage-" + $id)
++$backupRoot = Join-Path $root (".model-backups\" + $id)
++$backup = Join-Path $backupRoot "model-ru-small"
++$lockPath = Join-Path $root ".vosk-install.lock"
++$lock = $null
++$oldMoved = $false
+ 
+-Invoke-WebRequest "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip" -OutFile $zip
+-if (Test-Path $tmp)  { Remove-Item $tmp  -Recurse -Force }
+-if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+-Expand-Archive $zip $tmp
+-New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+-Move-Item (Get-ChildItem $tmp | Select-Object -First 1).FullName $dest
+-[guid]::NewGuid().ToString() | Set-Content (Join-Path $dest "uuid") -NoNewline -Encoding ascii
+-Write-Host "Готово: $dest"
++function Assert-ModelFile([string]$directory, [string]$relativePath) {
++    $file = Get-Item -LiteralPath (Join-Path $directory $relativePath) -ErrorAction Stop
++    if ($file.PSIsContainer -or $file.Length -le 0) { throw "Missing or empty model file: $relativePath" }
++}
++
++try {
++    # Exclusive installation. A stale lock after a process crash must be reviewed, not overwritten.
++    $lock = [IO.File]::Open($lockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
++    New-Item -ItemType Directory -Path $workPath | Out-Null
++    if ($ModelZip) {
++        if (!(Test-Path -LiteralPath $ModelZip -PathType Leaf)) { throw "Local model ZIP does not exist" }
++        $archive = (Resolve-Path -LiteralPath $ModelZip).Path
++    } else {
++        $archive = Join-Path $workPath "model.zip"
++        Invoke-WebRequest "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip" -OutFile $archive
++    }
++
++    $unpack = Join-Path $workPath "unpacked"
++    # Reject archive paths escaping the temporary extraction directory, including older PowerShell versions.
++    Add-Type -AssemblyName System.IO.Compression.FileSystem
++    $archiveReader = [IO.Compression.ZipFile]::OpenRead($archive)
++    try {
++        $prefix = [IO.Path]::GetFullPath($unpack) + [IO.Path]::DirectorySeparatorChar
++        foreach ($entry in $archiveReader.Entries) {
++            $target = [IO.Path]::GetFullPath((Join-Path $unpack $entry.FullName))
++            if (!$target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe path in model ZIP" }
++        }
++    } finally { $archiveReader.Dispose() }
++    Expand-Archive -LiteralPath $archive -DestinationPath $unpack
++    $model = Join-Path $unpack "vosk-model-small-ru-0.22"
++    Assert-ModelFile $model "am\final.mdl"
++    Assert-ModelFile $model "conf\mfcc.conf"
++    $hclg = Join-Path $model "graph\HCLG.fst"
++    if ((Test-Path -LiteralPath $hclg -PathType Leaf) -and (Get-Item -LiteralPath $hclg).Length -gt 0) {
++        Assert-ModelFile $model "graph\HCLG.fst"
++    } else {
++        Assert-ModelFile $model "graph\HCLr.fst"
++        Assert-ModelFile $model "graph\Gr.fst"
++    }
++    [guid]::NewGuid().ToString() | Set-Content -LiteralPath (Join-Path $model "uuid") -NoNewline -Encoding ascii
++
++    # Prepare on the project filesystem before touching the installed model.
++    Copy-Item -LiteralPath $model -Destination $stage -Recurse
++    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
++    if (Test-Path -LiteralPath $dest) {
++        if (!(Test-Path -LiteralPath $dest -PathType Container)) { throw "Model destination is not a directory" }
++        New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
++        [IO.Directory]::Move($dest, $backup)
++        $oldMoved = $true
++    }
++    try { [IO.Directory]::Move($stage, $dest) }
++    catch {
++        if ($oldMoved -and !(Test-Path -LiteralPath $dest)) { [IO.Directory]::Move($backup, $dest) }
++        throw
++    }
++    Write-Host "Model installed: $dest"
++    if ($oldMoved) { Write-Host "Previous model preserved outside APK assets: $backup" }
++} finally {
++    # Only this invocation's temporary directories are removed. Previous models are kept.
++    try {
++        if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
++        if (Test-Path -LiteralPath $workPath) { Remove-Item -LiteralPath $workPath -Recurse -Force }
++    } finally {
++        if ($null -ne $lock) { $lock.Dispose(); Remove-Item -LiteralPath $lockPath -Force }
++    }
++}
+--- /dev/null
++++ b/scripts/tests/test_vosk_model.ps1
+@@ -0,0 +1,51 @@
++# Offline filesystem regression checks; synthetic fixtures are NOT real Vosk models.
++# Run: powershell -File scripts\tests\test_vosk_model.ps1
++$ErrorActionPreference = "Stop"
++$testRoot = Join-Path ([IO.Path]::GetTempPath()) ("voiceagent-model-test-" + [guid]::NewGuid().ToString())
++$scriptSource = Join-Path (Split-Path -Parent $PSScriptRoot) "download_vosk_model.ps1"
++function Assert-True([bool]$condition, [string]$message) { if (!$condition) { throw $message } }
++try {
++    $scriptDir = Join-Path $testRoot "scripts"
++    $dest = Join-Path $testRoot "app\src\main\assets\model-ru-small"
++    New-Item -ItemType Directory -Path $scriptDir -Force | Out-Null
++    New-Item -ItemType Directory -Path $dest -Force | Out-Null
++    Copy-Item -LiteralPath $scriptSource -Destination $scriptDir
++    $installer = Join-Path $scriptDir "download_vosk_model.ps1"
++    Set-Content -LiteralPath (Join-Path $dest "old-marker") -Value "keep this model"
++
++    $corrupt = Join-Path $testRoot "corrupt.zip"
++    Set-Content -LiteralPath $corrupt -Value "not a zip"
++    $failed = $false
++    try { & $installer -ModelZip $corrupt } catch { $failed = $true }
++    Assert-True $failed "Corrupt ZIP must fail"
++    Assert-True (Test-Path -LiteralPath (Join-Path $dest "old-marker")) "Corrupt ZIP removed installed model"
++    Write-Host "PASS corrupt archive preserves installed model"
++
++    $fixture = Join-Path $testRoot "vosk-model-small-ru-0.22"
++    New-Item -ItemType Directory -Path $fixture | Out-Null
++    Set-Content -LiteralPath (Join-Path $fixture "uuid") -Value "incomplete fixture"
++    $archive = Join-Path $testRoot "fixture.zip"
++    Compress-Archive -Path $fixture -DestinationPath $archive
++    $failed = $false
++    try { & $installer -ModelZip $archive } catch { $failed = $true }
++    Assert-True $failed "Incomplete ZIP must fail"
++    Assert-True (Test-Path -LiteralPath (Join-Path $dest "old-marker")) "Incomplete ZIP removed installed model"
++    Write-Host "PASS incomplete archive preserves installed model"
++
++    foreach ($file in @("am\final.mdl", "conf\mfcc.conf", "graph\HCLr.fst", "graph\Gr.fst")) {
++        $path = Join-Path $fixture $file
++        New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
++        Set-Content -LiteralPath $path -Value "synthetic fixture"
++    }
++    Compress-Archive -Path $fixture -DestinationPath $archive -Force
++    & $installer -ModelZip $archive
++    Assert-True (Test-Path -LiteralPath (Join-Path $dest "am\final.mdl")) "Wrong model nesting"
++    Assert-True (!(Test-Path -LiteralPath (Join-Path $dest "old-marker"))) "Old marker remained in new model"
++    $kept = @(Get-ChildItem -LiteralPath (Join-Path $testRoot ".model-backups") -Recurse -Filter "old-marker")
++    Assert-True ($kept.Count -eq 1) "Previous model was not preserved"
++    Assert-True ((Get-Content -LiteralPath $kept[0].FullName) -eq "keep this model") "Previous model changed"
++    Assert-True (!(Test-Path -LiteralPath (Join-Path $testRoot ".vosk-install.lock"))) "Lock leaked"
++    Write-Host "PASS local install retains backup and cleans lock"
++} finally {
++    if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
++}

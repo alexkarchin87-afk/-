@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.system.ChatsDigestTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-26T06:47:06" hostname="ac7b89ae9c6b" time="0.401">
+  <properties/>
+  <testcase name="longNotificationTailRemainsAvailableWithoutExceedingBudget" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.177"/>
+  <testcase name="networkFailureDoesNotConsumeNotifications" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.075"/>
+  <testcase name="cancellationDoesNotConsumeNotifications" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.036"/>
+  <testcase name="successfulSummaryAcknowledgesOnlyItsSnapshot" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.024"/>
+  <testcase name="notificationsBeyondTheFirstInputBudgetAreNotAcknowledged" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.033"/>
+  <testcase name="failedContinuationRetriesTheSameUnconsumedText" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.035"/>
+  <testcase name="equalAndEarlierTimestampsAreStillNewNotifications" classname="com.voiceagent.oneplus13.system.ChatsDigestTest" time="0.019"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

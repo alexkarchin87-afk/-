@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.core.VoiceRuntimeTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-24T11:40:34" hostname="ac7b89ae9c6b" time="0.009">
+  <properties/>
+  <testcase name="processingSpeechThenIdleFollowRealCompletion" classname="com.voiceagent.oneplus13.core.VoiceRuntimeTest" time="0.003"/>
+  <testcase name="exceptionClearsPhase" classname="com.voiceagent.oneplus13.core.VoiceRuntimeTest" time="0.002"/>
+  <testcase name="cancellingOneOwnerDoesNotClearAnother" classname="com.voiceagent.oneplus13.core.VoiceRuntimeTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

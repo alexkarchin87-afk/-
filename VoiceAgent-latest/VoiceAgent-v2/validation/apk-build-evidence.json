@@ -1,0 +1,7 @@
+{
+  "path": "app/build/outputs/apk/debug/app-debug.apk",
+  "size_bytes": 28292850,
+  "sha256": "80000c8a60f06ae5d0500d227371cd13116ff573ae5779805fc8ce0af9617b21",
+  "installed_or_run_on_android": false,
+  "vosk_model_bundled": false
+}

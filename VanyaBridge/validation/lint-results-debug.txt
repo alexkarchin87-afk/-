@@ -1,0 +1,10 @@
+/workspace/VanyaBridge/android/app/src/main/java/com/vanyabridge/app/BridgeClient.kt:20: Warning: Implementing a custom X509TrustManager is error-prone and likely to be insecure. It is likely to disable certificate validation altogether, and is non-trivial to implement correctly without calling Android's default implementation. [CustomX509TrustManager]
+    private val trust = object : X509TrustManager {
+                        ~~~~~~
+
+   Explanation for issues of type "CustomX509TrustManager":
+   This check looks for custom X509TrustManager implementations.
+
+   https://goo.gle/CustomX509TrustManager
+
+0 errors, 1 warnings

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.lecture.LectureSummaryRecoveryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-22T16:20:21" hostname="ac7b89ae9c6b" time="0.074">
+  <properties/>
+  <testcase name="cancellationLeavesRetryableTranscriptAndReleasesLock" classname="com.voiceagent.oneplus13.lecture.LectureSummaryRecoveryTest" time="0.054"/>
+  <testcase name="duplicatesWaitAndReuseSavedSummary" classname="com.voiceagent.oneplus13.lecture.LectureSummaryRecoveryTest" time="0.008"/>
+  <testcase name="queuedDifferentLecturesBothGetSaved" classname="com.voiceagent.oneplus13.lecture.LectureSummaryRecoveryTest" time="0.005"/>
+  <testcase name="emptyTranscriptAndBlankResponseNeverBecomeSuccessfulSummary" classname="com.voiceagent.oneplus13.lecture.LectureSummaryRecoveryTest" time="0.002"/>
+  <testcase name="failureKeepsTextAndNewInstanceCanRetry" classname="com.voiceagent.oneplus13.lecture.LectureSummaryRecoveryTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

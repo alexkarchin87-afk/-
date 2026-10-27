@@ -1,0 +1,1389 @@
+VOICEAGENT-v2 — ИНЖЕНЕРНЫЙ АУДИТ
+Дата: 19–20 октября 2026 года
+Формат: полный технический отчёт на русском языке
+
+Объект проверки: предоставленный архив о.zip.
+SHA-256 архива:
+e5296c17aacdb8c9d6b3cdf85bb7eebb2ee0b09ccb425f08a3dc3900ad8baf8a
+
+Режим: только аудит. Исходный код и зависимости не изменялись. Программное обеспечение не устанавливалось.
+
+Обозначения путей:
+A/ = app/src/main/java/com/voiceagent/oneplus13/
+E/ = core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/
+Остальные пути — относительно корня VoiceAgent-v2.
+Номера строк относятся к файлам исходного архива.
+
+Уровни уверенности:
+CONFIRMED — механизм подтверждён кодом, контрактом платформы или описанной диагностикой; это не обязательно воспроизведение на Android.
+LIKELY — высокая вероятность, но нужна дополнительная проверка.
+POSSIBLE — обоснованная гипотеза.
+UNKNOWN — недостаточно информации.
+
+Серьёзность:
+BLOCKER — препятствует основному сценарию или выпуску.
+CRITICAL — доказанный особо тяжёлый дефект с широким воздействием.
+HIGH — существенный отказ функции, потеря данных или нарушение границы доверия.
+MEDIUM — ограниченный функциональный дефект или значительный риск сопровождения.
+LOW — локальное улучшение.
+
+В архиве 121 файл, включая 75 Kotlin-файлов, из которых 2 — тестовые, 2 Python-файла и 14 XML-файлов. Количество файлов не использовалось как показатель качества. История Git, установленный APK, crash reports и фактическая конфигурация сервера не предоставлены.
+
+============================================================
+A. EXECUTIVE SUMMARY
+============================================================
+
+VoiceAgent-v2 — персональный Android-ассистент с локальным STT Vosk, системным TTS, прямыми обращениями к LLM, действиями через Android API и Accessibility, экспериментальными функциями лекций, генерации проектов и workflow.
+
+ОБЩИЙ ВЫВОД: функциональный прототип с существенными дефектами надёжности. Текущую версию нельзя рекомендовать для постоянного автономного использования, важных сообщений и хранения единственной копии лекций. Продолжать разработку целесообразно, но сначала необходимо исправить центральные контракты состояния, аудио, действий и сохранения данных.
+
+Фактический основной путь:
+Android → HTTPS DeepSeek → разбор ответа → действие или TTS.
+
+Python-сервер в этот путь не включён. SessionGate, AgentSocket, VoiceCaptureController и заявленная доменная машина состояний в предоставленных исходниках отсутствуют. Есть альтернативный SSE-клиент VanyaAutomationEngine, но создание и запуск из приложения не найдены.
+
+На дату проверки обычный LLMClient использует deepseek-chat и deepseek-reasoner. Официальный changelog DeepSeek сообщает прекращение этих имён 24 июля 2026 года [S1]. Несоответствие опубликованному контракту подтверждено; фактический отказ авторизованного запроса не проверялся. Это вероятный функциональный BLOCKER. Настроенный Claude не заменяет обязательный первый DeepSeek-запрос обычного маршрута. Отдельная команда «спроси Клода» с ключом использует иной путь.
+
+Основные подтверждённые проблемы:
+
+1. Таймер 20 секунд отменяет голосовую команду во время LLM, действия или TTS; блокирующий HTTP при этом может продолжать работу.
+2. Голос, текст, overlay и внешние события меняют один оркестратор без единого владельца состояния, request ID и общей политики порядка.
+3. Лекция сохраняется только после успешной облачной суммаризации. Сбой сети или ключа оставляет транскрипт несохранённым.
+4. Повторный start лекции и поздний callback загрузки модели нарушают владение записью.
+5. JSON-пример в обычном ответе LLM может стать исполняемой командой. Для значимых действий нет независимого контроля текущего намерения.
+6. Чтение проекта допускает выход за generated_projects и последующую передачу чужих для этого проекта файлов LLM.
+7. Экспорт создаёт постоянный plaintext-файл с ключами вне исключений Android Backup; его отправка дополнительно ломается из-за FileProvider.
+8. Повторный показ overlay использует уже уничтоженный LifecycleOwner.
+9. Основной FGS активирует также dataSync, что несовместимо с обещанием неограниченного фонового прослушивания на Android 15+.
+10. Получатель ответа на уведомление выбирается по подстроке неуникального отображаемого имени.
+
+Полезные решения:
+— односторонняя зависимость app → ai-engines;
+— локальное распознавание речи;
+— Mutex в TTS;
+— AtomicBoolean для идемпотентного release одного SpeechService;
+— canonical path guard при записи проекта;
+— response.use для HTTP;
+— encrypted preferences для штатных ключей;
+— фиксированный набор root-команд;
+— синхронизированный ограниченный буфер уведомлений;
+— чистые parser-функции и отдельные тесты для них.
+
+Эти меры решают локальные задачи. Они не обеспечивают автоматически согласованность сквозного сценария. Полная перепись не обоснована; необходим целевой пересмотр session/audio ownership, исполнения действий и persistence.
+
+============================================================
+B. ARCHITECTURE MAP
+============================================================
+
+B1. Модули и входы
+
+settings.gradle.kts:17–18:
+:app → :core:ai-engines.
+Обратной Gradle-зависимости не обнаружено.
+
+app/build.gradle.kts:26–31:
+minSdk 26, compileSdk/targetSdk 35.
+Конфигурация использует Kotlin 2.0.21, AGP 8.7.3, Gradle 8.9, coroutines 1.9, Vosk 0.3.45, OkHttp 4.12. Сборка в этой среде не подтверждена.
+
+Основные точки входа:
+VoiceAgentApp, MainActivity, SettingsActivity, WorkflowEditorActivity;
+VoiceAgentService;
+AccessibilityAgent и NotificationReader;
+BootReceiver.
+
+Текстовая схема активного маршрута:
+
+MainActivity / Overlay
+  → binder/callback VoiceAgentService
+  → отдельный coroutine launch
+  → AgentOrchestrator.handleTranscript
+
+VoiceAgentService
+  → Vosk awaitWakeWord
+  → Vosk listen Flow
+  → AgentOrchestrator.handleTranscript
+
+AgentOrchestrator
+  → история, pending-подтверждения, UserMemory
+  → LLMClient
+      → HTTPS DeepSeek
+      → при необходимости Claude-review
+  → tryParseAction
+      → SystemController / Accessibility / RemoteInput
+      → LectureCommands / CodeGenAgent / Notes / WorkflowRunner
+      → либо Android TTS
+  → AgentEventBus
+      → UI / overlay / уведомления
+
+Отдельный, не подключённый к основному сервису маршрут:
+
+VanyaAutomationEngine
+  → опциональный ScreenCaptureManager
+  → POST /chat/stream
+  → Python FastAPI
+  → DeepSeek streaming
+  → SSE chunks
+  → очередь потоковой озвучки
+
+Python POST /jobs
+  → daemon thread
+  → задержка 5 секунд
+  → фиктивный result_url.
+
+Это не WebSocket-архитектура.
+
+B2. Наличие компонентов
+
+AgentOrchestrator:
+Активная реализация. Диспетчер действий, история, pending-состояния, значительная часть бизнес-логики.
+A/agent/AgentOrchestrator.kt:48–79,89–203,261–299.
+Полноценная FSM отсутствует.
+
+SessionGate:
+Не найден ни класс, ни контракт, ни использование.
+
+VoiceCaptureController:
+Не найден. Его предполагаемые обязанности распределены между VoiceAgentService и STTEngine.
+A/core/VoiceAgentService.kt:142–168; E/STTEngine.kt:55–160.
+
+AgentSocket / WebSocket:
+Не обнаружены клиент, серверный endpoint или lifecycle WebSocket. Реальны HTTPS и SSE.
+
+LLMClient:
+Активный прямой HTTP-клиент DeepSeek/Claude.
+E/LLMClient.kt:100–118,146–164,176–259.
+
+AccessibilityAgent:
+Реальный Android service: чтение дерева, клики и жесты.
+A/system/AccessibilityAgent.kt:22–106; AndroidManifest.xml:71–81.
+
+SystemController:
+Реальные intent/system API, громкость, жесты, интеграции.
+A/system/SystemController.kt:37–169.
+
+VanyaAutomationEngine:
+Существенная SSE-реализация, но создание/запуск не найдены.
+A/system/VanyaAutomationEngine.kt:56–286.
+
+ScreenCaptureManager:
+Реальная MediaProjection-реализация. Не найден активный consent flow, запускаемый Activity приложения.
+A/system/ScreenCaptureManager.kt:51–84,94–205.
+
+ScreenCaptureService:
+Объявлен в manifest:114–117; относится к незадействованной capture-ветке.
+
+TelegramBotService:
+Объявлен, но запускающий код приложения не найден.
+A/integrations/bot/TelegramBotService.kt:23–36.
+
+Telegram / WhatsApp / MAX:
+Telegram-клиент реален; WhatsApp-клиент не подключён; MAX содержит предположительный API-контракт.
+A/integrations/messenger/.
+MessengerBridge публикует messenger_received, но внешний обработчик оркестратора реагирует только на botfather_token_found:
+MessengerBridge.kt:71–82; AgentOrchestrator.kt:205–219.
+Работающий автономный бот этим кодом не подтверждается.
+
+NotificationReader:
+Реальная отдельная интеграция через Notification Access и RemoteInput.
+A/system/NotificationReader.kt:53–120.
+
+Overlay:
+Реализован и вызывается сервисом; lifecycle повторного показа дефектен.
+A/overlay/OverlayBubbleController.kt:81–182.
+
+Workflow:
+Реальный редактор, генератор и runner с ограниченной проверкой графа.
+A/workflow/WorkflowAiBuilder.kt:48–90;
+A/workflow/WorkflowRunner.kt:28–63.
+
+Лекции:
+STT-транскрипция в RAM и облачная суммаризация. Сырые аудиофайлы не сохраняются.
+A/lecture/LectureRecorder.kt:24–51;
+A/lecture/LectureCommands.kt:23–37.
+
+Заметки и генерация кода:
+Есть создание текста, файлов и ZIP. Выполнение сгенерированного проекта внутри VoiceAgent не обнаружено.
+A/notes/; A/devassist/.
+
+Python /jobs:
+Явная заглушка, не реальный исполнитель.
+backend/server.py:72–88.
+
+Самообновление:
+FeatureRequests сохраняет запросы на функции, но не реализует автономное внесение изменений.
+A/core/FeatureRequests.kt.
+
+B3. Ответственность и связи
+
+Большая часть бизнес-логики сосредоточена в AgentOrchestrator: диалог, подтверждения, память, проекты, уведомления и системные действия. Feature-зависимости создаются напрямую, что затрудняет подмену транспорта, часов, storage и Android effects в тестах.
+
+Системные адаптеры отделены каталогом system, но связаны статическими instance, PendingProject, SharedPreferences и строковыми action. Gradle-цикла нет. Есть косвенная петля «уведомление → bus → orchestrator → проект/секрет → уведомление», но бесконечная рекурсия не доказана.
+
+AgentEventBus:
+MutableSharedFlow с replay=0, extraBufferCapacity=32.
+lastStatus — строковый MutableStateFlow.
+A/core/AgentEventBus.kt:28–45.
+
+Контейнер StateFlow потокобезопасен, но не делает атомарными историю, pending, состояние микрофона и внешние эффекты. Изменение status и emit события также не одна транзакция.
+
+AgentPhase — UI-интерпретация русских строк и таймеров, не доменная машина состояний.
+A/ui/ChatComponents.kt:73–139.
+Нет sessionId/requestId, структурированного terminal result и журнала переходов. По UI нельзя надёжно определить, завершён ли HTTP и закрыт ли микрофон.
+
+Неиспользуемые ветки должны иметь явный экспериментальный статус или проверенный end-to-end маршрут. Само наличие класса не означает реализованную функцию.
+
+============================================================
+C. CRITICAL FINDINGS
+============================================================
+
+Заголовок раздела не означает, что каждому замечанию присвоен уровень CRITICAL. BLOCKER VA-01 условен до авторизованной проверки API.
+
+ID | Severity | Component | Problem | Evidence | Confidence
+VA-01 | BLOCKER, вероятный | LLMClient | Устаревшие model IDs в основном маршруте | E/LLMClient.kt:107–118; S1 | LIKELY для отказа; конфигурация CONFIRMED
+VA-02 | HIGH | Action dispatch | JSON из текста исполняется как команда | A/agent/AgentParsing.kt:34–41; AgentOrchestrator.kt:186–189 | CONFIRMED
+VA-03 | HIGH | ProjectStorage | Traversal при чтении и отправка файлов LLM | A/devassist/ProjectStorage.kt:56–69; AgentOrchestrator.kt:342–358 | CONFIRMED
+VA-04 | HIGH | Backup | Постоянный plaintext export ключей вне backup exclusions | A/core/BackupManager.kt:41–52,74–75; backup XML | CONFIRMED; фактический перенос UNKNOWN
+VA-05 | HIGH | Orchestrator | Конкурентные команды и pending без сериализации | A/core/VoiceAgentService.kt:157,213,234; AgentOrchestrator.kt:68–79,112–117 | CONFIRMED
+VA-06 | HIGH | Voice/HTTP | Idle timer отменяет работу; HTTP не связан с cancel | A/core/VoiceAgentService.kt:147–167; E/LLMClient.kt:238–259 | CONFIRMED
+VA-07 | HIGH | Voice capture | STT остаётся активным во время TTS | A/core/VoiceAgentService.kt:151–157; E/STTEngine.kt:109–154 | CONFIRMED механика; самоэхо LIKELY
+VA-08 | HIGH | Lectures | Сохранение зависит от успешного LLM | A/lecture/LectureCommands.kt:29–37 | CONFIRMED
+VA-09 | HIGH | Lecture lifecycle | Повторный start и поздний callback нарушают запись | LectureCommands.kt:23–26; LectureRecorder.kt:24–51 | CONFIRMED
+VA-10 | HIGH | Overlay | Повторное использование уничтоженного owner | A/overlay/OverlayBubbleController.kt:65,120,182 | CONFIRMED по коду/API
+VA-11 | HIGH | FGS | dataSync-limit затрагивает постоянный voice service | manifest:66–69; VoiceAgentService.kt:88; S3–S4 | CONFIRMED; device не проверен
+VA-12 | HIGH | Diagnostics | su.waitFor без timeout в main | A/system/Diagnostics.kt:147–154; SettingsActivity.kt:315,345 | CONFIRMED блокировка; ANR условен
+VA-13 | HIGH | Notification reply | Неуникальный получатель и конкурентная HashMap | A/system/NotificationReader.kt:36,60,88,98–112 | CONFIRMED
+VA-14 | MEDIUM | Backup share | Файл вне FileProvider roots | BackupManager.kt:74,120–125; file_paths.xml | CONFIRMED
+VA-15 | MEDIUM | Backup import | Частичные изменения при результате false | A/core/BackupManager.kt:81–118 | CONFIRMED
+VA-16 | MEDIUM | Workflow | Неполный обход/цикл дают Finished | A/workflow/WorkflowRunner.kt:28–45 | CONFIRMED
+VA-17 | MEDIUM | App resolution | MATCH_DEFAULT_ONLY отбрасывает launcher Activity | A/system/SystemController.kt:48–53; S8 | CONFIRMED для фильтра без DEFAULT
+VA-18 | MEDIUM | Telegram, dormant | HTTP-ошибки создают polling без паузы | TelegramClient.kt:48–57; MessengerBridge.kt:42–54 | CONFIRMED в этой ветке
+VA-19 | HIGH при deployment | Python worker | Default secret, неограниченные jobs/threads | backend/server.py:31–37,63–87 | CONFIRMED; экспозиция UNKNOWN
+VA-20 | MEDIUM | SSE, dormant | EOF без terminal считается успехом | backend/server.py:135–149; VanyaAutomationEngine.kt:213–225 | CONFIRMED, изолированная диагностика
+VA-21 | MEDIUM | Vosk resources | Вероятно не закрывается native Recognizer | E/STTEngine.kt:63–77,113–125,157–160; S9 | LIKELY; версия 0.3.45 не проверена
+VA-22 | MEDIUM | CI/testing | Failed unit tests не блокируют APK | .github/workflows/build-apk.yml:63–69 | CONFIRMED
+
+============================================================
+D. DETAILED FINDINGS
+============================================================
+
+VA-01. Несоответствие основной модели актуальному API-контракту
+Severity: вероятный BLOCKER.
+Confidence: конфигурация CONFIRMED; фактический отказ LIKELY.
+
+Файл/функция:
+E/LLMClient.kt:100–118, complete.
+backend/server.py:100–104.
+
+Проблема и причина:
+Android жёстко выбирает deepseek-chat/deepseek-reasoner. Официальный changelog сообщает прекращение legacy names 2026-07-24 [S1]. Сначала вызывается completeDeepSeek; Claude-review расположен после него и не перехватывает его отказ. Backend допускает переопределение модели через env, но Android-путь использует фиксированные ID.
+
+Воспроизведение:
+С действующим ключом выполнить обычный complete и проверить HTTP status/body. По опубликованному контракту ожидается отказ. Авторизованный запрос здесь не выполнялся.
+
+Последствия:
+Могут не работать основной диалог, суммаризация и генерация. Локальные fast-path действия, workflow и прямой Claude при настроенном ключе не обязательно затронуты.
+
+Исправление:
+Явная конфигурация поддерживаемой модели и режима; проверка параметров, response schema и лимитов. Короткий контрактный smoke test с отдельным ключом и контролем расходов. Ошибка модели должна отличаться от сетевой ошибки.
+
+Повторная проверка:
+Наличие Claude не спасает обычный маршрут. Подозрения о несуществующем claude-sonnet-5-5 и невалидном vision-alias не подтвердились по официальным источникам [S10–S11]. Замена одной строки без проверки режима нового API недостаточна.
+
+VA-02. Текст ответа и управляющий канал не разделены
+Severity: HIGH.
+Confidence: CONFIRMED механизм; частота неправильных LLM-команд UNKNOWN.
+
+Файл/функция:
+A/agent/AgentParsing.kt:34–41, tryParseAction.
+A/agent/AgentOrchestrator.kt:186–189,261–297,475–487,668–680.
+
+Проблема и причина:
+Первый JSON-объект извлекается даже из пояснения или примера. Известный action исполняется. Нет самостоятельной проверки соответствия действия пользовательскому намерению. apply_captured_token доступен через общую dispatch-таблицу, хотя нормальный маршрут задаёт отдельный вопрос о согласии.
+
+Сценарий:
+Пользователь просит объяснить JSON команды reply_notification. Модель возвращает пример с существующим именем собеседника. Парсер принимает пример, dispatch отправляет сообщение. Приём JSON внутри обычного текста подтверждён также существующим parser-тестом. Конкретная такая генерация LLM не воспроизводилась.
+
+Последствия:
+Информационный ответ становится побочным эффектом. Ошибка модели получает доступ ко всем действиям allowlist вместо разрешённого намерения текущего запроса.
+
+Исправление:
+Отделить ответ от типизированного предложения действия; валидировать параметры и разрешённые возможности запроса. Для отправки, значимых кликов и применения секрета — одноразовое подтверждение конкретного payload, получателя, request ID и срока действия. Map<String,String> не является доказательством согласия.
+
+Повторная проверка:
+Allowlist в dispatch есть; произвольный неизвестный action не исполняется. Root-команды ограничены. Ответы чтения экрана и digest уведомлений не проходят повторно через tryParseAction. Произвольный root-shell и удалённая prompt injection из любого уведомления не доказаны.
+
+VA-03. Path traversal при чтении проекта с передачей данных LLM
+Severity: HIGH.
+Confidence: CONFIRMED исходниками и синтетической файловой проверкой.
+
+Файл/функция:
+A/devassist/ProjectStorage.kt:56–69, loadProjectFiles/loadProjectPlatform.
+A/agent/AgentOrchestrator.kt:342–358, handleContinueCode.
+A/devassist/CodeGenAgent.kt:130–136, revise.
+
+Проблема и причина:
+project_name без проверки попадает в generated_projects/$projectName. Затем рекурсивно читаются файлы. Нет canonical containment и проверки зарегистрированного ID. revise включает прочитанное содержимое в prompt.
+
+Сценарий:
+При наличии filesDir/notes параметр ../notes читает этот каталог как проект. Параметр .. может захватить другие файлы filesDir, включая оставленный plaintext backup. Синтетическая проверка эквивалентного выражения подтвердила обход. Kotlin/Android не выполнялись.
+
+Последствия:
+Чтение и передача данных вне выбранного проекта. Граница доступа — права UID приложения; доступ ко всему телефону или приватным каталогам других приложений не доказан. Реальная передача требует работающего LLM-транспорта; временная неработоспособность VA-01 не исправляет эту границу.
+
+Исправление:
+Внутренний ID зарегистрированного проекта вместо свободного пути. Canonical-проверки для чтения и метаданных до чтения/сети. Allowlist файлов, ограничения размера и исключение секретов.
+
+Повторная проверка:
+save санитизирует имя и проверяет canonical path (ProjectStorage.kt:23–50). Это защита записи после revise, не предшествующего чтения. Arbitrary file write не заявляется.
+
+VA-04. Постоянный plaintext-экспорт ключей вне backup exclusions
+Severity: HIGH.
+Confidence: CONFIRMED файл и правила; фактическая утечка UNKNOWN.
+
+Файл/функция:
+A/core/BackupManager.kt:36–76, exportBackup.
+app/src/main/res/xml/backup_rules.xml:3–5.
+app/src/main/res/xml/data_extraction_rules.xml:4–11.
+AndroidManifest.xml:38–40.
+
+Проблема и причина:
+Ключи расшифровываются из SecretsStore и записываются в filesDir/voiceagent_backup.json. Удаления нет. XML исключают encrypted preferences, но не этот файл. filesDir входит в Auto Backup по умолчанию [S5].
+
+Сценарий:
+Нажать экспорт. Файл создаётся даже если последующий share падает. Он остаётся доступен UID приложения, в том числе reader из VA-03, и допустим к backup согласно правилам.
+
+Последствия:
+Дополнительное долговременное хранилище секретов без шифрования приложения. Фактический cloud upload зависит от настроек/условий/квоты. Android backup может иметь собственное шифрование; публичная plaintext-передача не установлена.
+
+Исправление:
+Шифрованный экспорт; либо временный plaintext в исключённом каталоге с ограниченным сроком хранения. Исключить из cloud backup/device transfer и из reader проектов. Проверять очистку после неуспеха.
+
+Повторная проверка:
+UI предупреждает о plaintext (SettingsActivity.kt:246–250). Это делает формат явным, но не устраняет постоянный остаток и несовпадение exclusions. Штатное encrypted storage не признано открытым.
+
+VA-05. Конкурентные команды и подтверждения без единого владельца
+Severity: HIGH.
+Confidence: CONFIRMED допустимые interleaving; стресс-тест не запускался.
+
+Файл/функция:
+A/core/VoiceAgentService.kt:48–54,151–157,213,232–235.
+A/agent/AgentOrchestrator.kt:68–79,89–117,180–192,683–687.
+
+Проблема и причина:
+Каждая текстовая отправка запускает coroutine. Голосовой collect и подписка на external events независимы. Общие ArrayDeque history и pending-поля не защищены общей очередью/Mutex/thread confinement. SupervisorJob не сериализует задачи.
+
+Порядок событий №1:
+1. A начинает медленный LLM-запрос.
+2. B запускается отдельно и завершается быстрее.
+3. B ставит громкость 20%.
+4. A позднее возвращает действие «80%» и исполняет его.
+5. Ни supersession-проверки, ни заранее определённой FIFO-политики нет.
+
+Порядок №2:
+Две coroutine читают один ненулевой pendingConfirmation до очистки. Обе получают «да», обе могут вызвать dispatch. Другой вариант: callback нового токена заменяет pending между заданным вопросом и ответом пользователя.
+
+Последствия:
+Неожиданный порядок эффектов, смешанная история, повторное действие или подтверждение не того запроса. size/remove/add/toList истории также не составляют атомарную операцию.
+
+Исправление:
+Явная FIFO/reject/supersede-политика и один owner состояния. Эффекты возвращают результат с request/session ID. Подтверждение — одноразовый объект конкретной операции. Срочная отмена не должна ждать завершения долгого HTTP под общей блокировкой.
+
+Повторная проверка:
+Голосовой collect сам по себе последователен. Параллельность возникает из других входов. TTS Mutex защищает только речь, не историю и действия.
+
+VA-06. Idle timer отменяет работающую команду; HTTP не отменяется
+Severity: HIGH.
+Confidence: CONFIRMED; точные задержки/расходы не измерялись.
+
+Файл/функция:
+A/core/VoiceAgentService.kt:142–171,309, listenOnce.
+E/LLMClient.kt:82–86,100–118,238–259, complete/executeWithRetry.
+
+Проблема и причина:
+Deadline продлевается при начале обработки транскрипта. Внутри collect выполняется весь LLM/action/TTS. Через 20 секунд отдельный timer вызывает session.cancelAndJoin. withContext(IO) содержит блокирующие Call.execute и Thread.sleep без Call.cancel по coroutine cancellation. Есть connect/read timeout, но нет общего call deadline.
+
+Сценарий:
+Ответ модели занимает 25 секунд. На 20-й секунде session отменяется. HTTP продолжает работу, cancelAndJoin ждёт. До трёх попыток и последовательный Claude-review могут увеличить время; read timeout не ограничивает общий wall-clock срок всех этапов.
+
+Последствия:
+Потеря результата долгой команды, задержка возврата к wake-word, лишняя сетевая работа после отмены. Может обрываться длинная речь. Выполненный внешний эффект не откатывается.
+
+Исправление:
+Разделить idle timeout и operation deadline. Idle отсчитывать только в состоянии готовности принять речь. Cancellable bridge OkHttp с Call.cancel, suspend-delay, общим бюджетом и retry policy.
+
+Повторная проверка:
+withContext при смене dispatcher имеет prompt cancellation guarantee [S2]. Поэтому отменённый результат не обязан дойти до озвучки; такое обобщение неверно. Подтверждены продолжающийся transport, задержка join и преждевременная отмена. Неотменённая поздняя UI-команда из VA-05 — отдельный случай.
+
+VA-07. STT продолжает принимать звук во время TTS
+Severity: HIGH.
+Confidence: перекрытие CONFIRMED; самоэхо LIKELY, требует устройства.
+
+Файл/функция:
+A/core/VoiceAgentService.kt:149–157.
+E/STTEngine.kt:109–154.
+A/agent/AgentOrchestrator.kt:191–192.
+
+Проблема и причина:
+Producer callbackFlow не закрывается, пока обработчик ждёт LLM/TTS. Release находится в awaitClose; нет перехода «микрофон закрыт до Speaking». Echo filtering/audio focus/AEC для собственного TTS не обнаружены.
+
+Сценарий:
+Короткий ответ звучит из динамика, Vosk распознаёт его и помещает в канал. После текущего handler текст может стать следующей командой, пока session активна. Аналогично накапливается устаревшая речь пользователя. Результат trySend не проверяется — при переполнении возможна потеря текста.
+
+Последствия:
+Самоактивация, повторные запросы, возможные действия от собственной речи. Неизбежность такого цикла на любом устройстве не утверждается.
+
+Исправление:
+Явный полудуплекс либо проверяемый barge-in с отдельным interrupt path и echo cancellation. В простом варианте закрыть STT, дождаться освобождения, выполнить TTS, затем открыть новый capture ID.
+
+Повторная проверка:
+Dormant Vanya использует stt.listen().first(), закрывающий сбор до ответа. Это не защищает активный сервис. Наушники/акустика могут уменьшить проявление.
+
+VA-08. Лекция теряется при неуспехе суммаризации
+Severity: HIGH.
+Confidence: CONFIRMED.
+
+Файл/функция:
+A/lecture/LectureCommands.kt:29–37, stop.
+LectureSummarizer.kt:15–19; LectureStorage.kt:12–15; LectureSession.kt:11–18.
+
+Проблема и причина:
+Транскрипт живёт в RAM. Stop запускает независимую coroutine: summarize, потом save. current сразу null. Нет autosave, сохранения до сети, durable job и catch вокруг summarize.
+
+Сценарий:
+Записать лекцию, отключить сеть или использовать неработающий ключ, остановить. summarize бросает исключение; save не вызывается. Через current повторить сохранение нельзя. Process death во время записи/сети также теряет материал.
+
+Последствия:
+Потеря пользовательских данных. Необработанное исключение launch выходит в uncaught handling и может завершить процесс.
+
+Исправление:
+Инкрементальная crash-safe запись. Stop фиксирует исходник до LLM. Суммаризация — отдельная повторяемая работа над сохранённым материалом с failed/retry status.
+
+Повторная проверка:
+Catch внутри recorder относится к STT collect, а не summarize/save в LectureCommands. Другого пути сохранения текущей лекции не найдено.
+
+VA-09. Lifecycle лекции допускает подмену сессии и запись после stop
+Severity: HIGH.
+Confidence: CONFIRMED.
+
+Файл/функция:
+A/lecture/LectureCommands.kt:19–37.
+A/lecture/LectureRecorder.kt:19–51.
+A/core/VoiceAgentService.kt:247–253.
+
+Сценарий 1:
+S1 записывается. Повторный LectureCommands.start создаёт S2 и заменяет current. Recorder видит listening=true и возвращается. Продолжает наполняться S1, но stop сохраняет S2.
+
+Сценарий 2:
+Start запускает async ensureModel. Stop происходит до onReady; job ещё нет. Поздний onReady без проверки generation/listening запускает запись в живом независимом scope.
+
+Сценарий 3:
+Остановка VoiceAgentService отменяет только его job и собственные stt/tts. LectureCommands и LectureRecorder создали отдельные Job(); cleanup от сервиса отсутствует. Лекция может пережить отключение голосового сервиса без корректного FGS-владельца.
+
+Причина/последствия:
+current и capture ownership разнесены без атомарного протокола. Потеря материала, неожиданное продолжение записи, конкуренция независимых STTEngine. Конкретная реакция Android HAL на два capture UNKNOWN; гарантированная ошибка «микрофон занят» не заявляется.
+
+Исправление:
+Идемпотентный/отклоняемый повторный start; назначать current после принятия записи. Generation token для model callback. Stop инвалидирует callbacks, отменяет и дожидается этапов. Единый audio owner и lifecycle foreground recording.
+
+Повторная проверка:
+Guard listening есть, но находится после изменения current в другом объекте. AtomicBoolean STT действует на один SpeechService, не на независимые engines.
+
+VA-10. Overlay повторно использует уничтоженный lifecycle
+Severity: HIGH.
+Confidence: CONFIRMED по исходникам и API; instrumentation не запускалась.
+
+Файл/функция:
+A/overlay/OverlayBubbleController.kt:65,81–90,98–123,174–182.
+A/overlay/OverlayLifecycleOwner.kt:27–49.
+
+Проблема и причина:
+Owner — val контроллера. Hide переводит его в DESTROYED. Следующий show создаёт новую ComposeView, но повторяет performAttach/performRestore/ON_CREATE на том же owner. Attachment одноразовый, уничтоженный lifecycle не предназначен для повторного старта [S6].
+
+Воспроизведение:
+Показать overlay → дождаться auto-hide → снова wake word. Это нормальный пользовательский цикл.
+
+Последствия:
+Исключение при attachment/lifecycle, неработающий повторный показ, возможный crash процесса. runCatching оборачивает addView, но attachToView вызывается до него.
+
+Исправление:
+Новая пара View/owner на каждый полноценный show либо временное скрытие сохранённой пары без DESTROYED. Корректный disposal при неудаче addView.
+
+Повторная проверка:
+Сервис не создаёт новый controller на каждый wake. Guard composeView!=null не устраняет повторное использование owner.
+
+VA-11. FGS активирует dataSync-limit для постоянного прослушивания
+Severity: HIGH.
+Confidence: CONFIRMED по коду/контракту; device-тест не выполнен.
+
+Файл/функция:
+app/src/main/AndroidManifest.xml:66–69.
+A/core/VoiceAgentService.kt:69–94, onCreate.
+app/build.gradle.kts:31.
+
+Проблема и причина:
+Manifest: microphone|dataSync. Обычный успешный путь использует двухаргументный startForeground — типы manifest, без выбора только microphone. Для target 35 на Android 15+ dataSync имеет суммарный фоновый бюджет 6 часов за 24 часа с условиями сброса [S3–S4]. onTimeout(int,int) отсутствует.
+
+Сценарий:
+Оставить сервис на Android 15+ в фоне до исчерпания бюджета. Система вызывает timeout; приложение не завершает сервис за grace period.
+
+Последствия:
+Принудительное завершение/crash; нельзя обещать неограниченное фоновое прослушивание. Это не утверждение о падении ровно через 6 часов при любом сценарии: foreground и общий budget меняют условия.
+
+Исправление:
+Выбирать минимально необходимый тип microphone; dataSync оформлять отдельно по реальной необходимости. Обрабатывать применимые timeout, тестировать фактический getForegroundServiceType.
+
+Повторная проверка:
+Ветка отсутствующего RECORD_AUDIO явно запускает dataSync и сразу stopSelf — это не найденный дефект. BootReceiver на API 34+ сознательно не запускает сервис, нарушение boot-правил ему не приписывается.
+
+VA-12. Root diagnostics блокирует main thread без timeout
+Severity: HIGH.
+Confidence: блокирующий вызов CONFIRMED; ANR зависит от su.
+
+Файл/функция:
+A/system/Diagnostics.kt:35–44,147–154, runAll/checkRootAccess.
+A/SettingsActivity.kt:315,345.
+
+Проблема и причина:
+Диагностика вызывается в Compose remember/onClick. ProcessBuilder("su","-c","id").start().waitFor() работает на main без timeout.
+
+Сценарий:
+Root-manager ждёт решения или завис. Открыть диагностику. UI не обрабатывает события до завершения процесса; при соответствующих условиях возникает ANR.
+
+Последствия:
+Зависание настроек из-за самой проверки. На телефоне без su ошибка может быть быстрой.
+
+Исправление:
+IO worker, асинхронный статус, deadline, destroy по timeout/cancel и безопасная обработка потоков процесса.
+
+Повторная проверка:
+15-секундный timeout в RootActions относится к другому пути и не защищает Diagnostics.
+
+VA-13. RemoteInput выбирает неустойчивую идентичность получателя
+Severity: HIGH.
+Confidence: CONFIRMED по алгоритму; сообщения не отправлялись.
+
+Файл/функция:
+A/system/NotificationReader.kt:34–36,53–60,87–112, replyTo.
+A/agent/AgentOrchestrator.kt:475–487.
+
+Проблема и причина:
+HashMap индексируется только lowercase title. App/package/conversation ID не входят в ключ. Выбор — первое имя, содержащее запрос. PendingIntent отправляется сразу.
+
+Сценарий:
+Уведомления «Анна» из двух приложений: второе заменяет первое. Команда ответить Анне может уйти в другой разговор. «Анна» и «Анна работа» также дают неоднозначный подстрочный поиск.
+
+Конкурентный сценарий:
+replyTo итерирует HashMap из coroutine оркестратора; notification callback добавляет/удаляет запись. Изменение между созданием iterator и обходом допускает ConcurrentModificationException или несогласованный выбор.
+
+Последствия:
+Сообщение неправильному адресату или отказ отправки; root не нужен.
+
+Исправление:
+Устойчивый app/conversation/notification key и отдельно display name. Выбор при неоднозначности. Подтверждение конкретного получателя и текста. Сериализация индекса и повторная валидация PendingIntent перед отправкой.
+
+Повторная проверка:
+CanceledException защищает от отозванного PendingIntent, а не от неверного выбора. Android отправляет в выбранное уведомление и не проверяет пользовательское намерение.
+
+VA-14. Backup export не покрыт FileProvider roots
+Severity: MEDIUM.
+Confidence: CONFIRMED, XML/path диагностика без Android runtime.
+
+Файл/функция:
+A/core/BackupManager.kt:74–75,120–125.
+A/SettingsActivity.kt:105–110.
+app/src/main/res/xml/file_paths.xml.
+
+Проблема/причина:
+Backup лежит в корне filesDir. FileProvider разрешает только lectures/generated_projects/crashes и отдельные cache/external roots.
+
+Воспроизведение:
+Экспорт создаёт файл, затем getUriForFile не находит root и бросает IllegalArgumentException [S7]. OnClick не перехватывает исключение.
+
+Последствия:
+Неработающий перенос, возможный crash; plaintext остаётся.
+
+Исправление:
+Согласовать безопасное временное расположение с узким FileProvider root и очисткой VA-04. Не открывать весь filesDir.
+
+Повторная проверка:
+cache-path "." не покрывает filesDir. Сопоставление выполнено по реальному XML.
+
+VA-15. Failed import частично изменяет настройки
+Severity: MEDIUM.
+Confidence: CONFIRMED по порядку операций.
+
+Файл/функция:
+A/core/BackupManager.kt:79–118, importBackup.
+
+Проблема/причина:
+Секреты записываются до валидации memory и прочих полей. Нет staging, полной schema/version validation и rollback.
+
+Сценарий:
+Синтаксически валидный JSON с тестовым секретом и memory_facts_v2:[42]. Ключ записан на строке 85; getJSONObject на 95 падает; возвращается false, ключ не восстановлен. Невалидный JSON до parse — иной случай и не меняет данные.
+
+Последствия:
+Частичная миграция при сообщении о неудаче.
+
+Исправление:
+Полная проверка документа в неизменяемую структуру до записи, allowlist ключей/версии, transactional apply либо подготовленный rollback. Пустой {} не считать содержательным backup.
+
+Повторная проверка:
+runCatching ловит исключение, но не отменяет SharedPreferences.apply.
+
+VA-16. Workflow сообщает успех после неполного обхода
+Severity: MEDIUM.
+Confidence: CONFIRMED алгоритм; intent-crash требует Android-теста.
+
+Файл/функция:
+A/workflow/WorkflowRunner.kt:28–45.
+A/workflow/WorkflowModel.kt:85–90.
+A/workflow/WorkflowAiBuilder.kt:54–86.
+A/ui/workflow/WorkflowEditorActivity.kt:358–372.
+
+Проблема/причина:
+Повторный ID прерывает цикл, после чего выдаётся Finished. Выбираются первый старт и первое исходящее ребро. Graph validation не гарантирует связность/однозначность. Исключение runBlock не превращается в Failed; UI launch не обрабатывает его.
+
+Сценарий:
+A→B→A исполняет два блока и сообщает Finished. Две независимые цепи — только одна выполняется. OPEN_URL без handler может бросить исключение.
+
+Последствия:
+Ложный успех, пропуск действий, возможный crash UI.
+
+Исправление:
+Для текущих возможностей валидировать линейную цепь либо явно реализовать семантику ветвлений. Цикл/недостижимые узлы/исключения должны давать понятный Failed. Определить политику конкурирующих запусков.
+
+Повторная проверка:
+visited защищает от бесконечного цикла. Дефект — результат и семантика, не бесконечное выполнение.
+
+VA-17. MATCH_DEFAULT_ONLY исключает нормальные launcher Activity
+Severity: MEDIUM.
+Confidence: CONFIRMED для фильтра без DEFAULT.
+
+Файл/функция:
+A/system/SystemController.kt:37–53, openApp/resolvePackage.
+
+Проблема/причина:
+MAIN+LAUNCHER запрашивается с MATCH_DEFAULT_ONLY. Этот флаг требует CATEGORY_DEFAULT [S8], которой обычный launcher-фильтр может не иметь. Собственный manifest проекта:50–53 — пример MAIN+LAUNCHER без DEFAULT.
+
+Сценарий:
+Открытие по отображаемому имени приложения с таким фильтром: кандидат отбрасывается. По точному package путь может работать.
+
+Последствия:
+Неполный список и ложный отказ команды.
+
+Исправление:
+Корректный launcher query без лишнего ограничения; обработка неоднозначных названий. Device-тест разных manifest.
+
+Повторная проверка:
+queries для visibility объявлен. Не следует ошибочно обвинять отсутствие package visibility целиком.
+
+VA-18. Telegram HTTP-ошибки вызывают polling без паузы
+Severity: MEDIUM, неподключённая ветка.
+Confidence: CONFIRMED по коду.
+
+Файл/функция:
+A/integrations/messenger/TelegramClient.kt:48–57, pollUpdates.
+A/integrations/messenger/MessengerBridge.kt:42–54, pollTelegramLoop.
+
+Проблема/причина:
+Неуспешный HTTP возвращает emptyList и прежний offset. Delay 5 секунд есть только в catch, который не выполняется.
+
+Сценарий:
+Подключённый bot service с отозванным токеном получает быстрые 401 и сразу повторяет запрос. Для 429 не учитывается server retry interval.
+
+Последствия:
+Лишние запросы, расход энергии, усугубление rate limit. Реальная частота не измерялась.
+
+Исправление:
+Различать success/timeout/auth error/transient/rate limit. При неверном токене останавливать polling, иначе bounded backoff+jitter. Связать stop с job и HTTP.
+
+Повторная проверка:
+IOException обрабатывается с delay; это не охватывает HTTP-ошибки, превращённые в успех. Запуск службы в основном приложении не найден, поэтому текущий battery drain этим кодом не утверждается.
+
+VA-19. Worker запускается с известным default token; задания не ограничены
+Severity: HIGH при развёртывании.
+Confidence: CONFIRMED конфигурация/auth; экспозиция UNKNOWN.
+
+Файл/функция:
+backend/server.py:31–37,63–87, require_auth/submit_job.
+backend/.env.example:2; backend/docker-compose.yml:5–7; backend/Dockerfile.
+
+Проблема/причина:
+При отсутствии переменной используется change-me, выводится только warning. Compose проверяет непустую строку, но не запрещает примерное значение. Каждый /jobs создаёт daemon thread; JOBS растёт без TTL/очереди/persistence.
+
+Сценарий:
+Развернуть пример без смены токена и открыть порт. Default token проходит auth. Повторные запросы создают потоки и записи. Изолированное выполнение реальной require_auth подтвердило default acceptance; неправильный токен даёт 401.
+
+Последствия:
+При неверном deployment — посторонний доступ к /chat/stream и расход API, истощение jobs-ресурсов. Реальный публичный сервер не проверялся. Заглушка не исполняет произвольный код params_json; RCE не заявляется.
+
+Исправление:
+Fail startup для пустого/примерного секрета. HTTPS, ограничения input/concurrency/queue/TTL. Durable executor и cancel только если jobs нужны продукту. Не выдавать фиктивный URL как production result.
+
+Повторная проверка:
+Auth есть и отвергает неверные токены. Проблема не в полном отсутствии авторизации, а в небезопасном default и ресурсных границах.
+
+VA-20. Clean EOF SSE без terminal marker считается успехом
+Severity: MEDIUM, неподключённая ветка.
+Confidence: CONFIRMED кодом и изолированной диагностикой Python.
+
+Файл/функция:
+backend/server.py:123–149, generate_stream.
+A/system/VanyaAutomationEngine.kt:193–233, streamChat.
+
+Проблема/причина:
+Backend после конца upstream iteration выдаёт [DONE], не проверяя факт terminal. Android одинаково выходит по EOF и [DONE], затем успешно закрывает flow.
+
+Воспроизведение:
+Fake upstream выдаёт один chunk и clean EOF без DONE. Реальное извлечённое тело Python-функции выдаёт chunk и синтетический [DONE]. Это не полноценный FastAPI integration test.
+
+Последствия:
+Частичный ответ выглядит завершённым, озвучивается/попадает в историю. Resume sequence нет.
+
+Исправление:
+Различать chunk/success/error/unexpected EOF. Request ID и явный итог; incomplete не фиксировать как полный ответ. Не добавлять reconnect без политики недублирования озвучки.
+
+Повторная проверка:
+In-band error предусмотрен и клиентом обрабатывается. awaitClose вызывает Call.cancel — здесь отмена транспорта реализована. Дефект относится именно к EOF без terminal.
+
+VA-21. Native lifetime Vosk не подтверждён для закреплённой версии
+Severity: MEDIUM до проверки.
+Confidence: LIKELY; конкретная утечка UNKNOWN.
+
+Файл/функция:
+E/STTEngine.kt:63–77,113–125,157–160.
+
+Проблема/причина:
+Каждый wake/listen создаёт Recognizer. Нормальный release вызывает SpeechService.stop/shutdown, но не recognizer.close. Close есть при ошибке конструктора. Общего close Model также нет. В изученном upstream master shutdown освобождает AudioRecord, а native Recognizer — свой close [S9].
+
+Сценарий проверки:
+На версии 0.3.45 повторить сотни wake/listen/stop и рестартов сервиса, сопоставить native allocations/PSS после стабилизации. Сначала проверить именно artifact/source 0.3.45: master не доказывает точное поведение pinned dependency.
+
+Последствия:
+Возможный рост native ресурсов при длительной работе. Размер и факт роста не измерены.
+
+Исправление:
+Установить ownership точной версии, освобождать объекты один раз после join recording thread. Сохранить CAS/identity guards. Нельзя механически добавить close, рискуя double free.
+
+Повторная проверка:
+CAS уже обеспечивает одноразовый release конкретного SpeechService. Доказанного double-free нет. Pinned sources получить не удалось, поэтому CONFIRMED для утечки не назначен.
+
+VA-22. Failed unit tests не блокируют публикацию APK
+Severity: MEDIUM.
+Confidence: CONFIRMED конфигурация.
+
+Файл:
+.github/workflows/build-apk.yml:63–69.
+app/src/test/java/com/voiceagent/oneplus13/agent/AgentParsingTest.kt.
+app/src/test/java/com/voiceagent/oneplus13/core/JsonExtractionTest.kt.
+
+Проблема/причина:
+Unit step имеет continue-on-error:true. После успешного assemble APK может загружаться несмотря на failed tests. 12 тестов покрывают разбор текста/JSON, не жизненный цикл и эффекты.
+
+Сценарий:
+Parser regression ломает тест, assemble успешен — проверенный тестами артефакт не гарантируется.
+
+Последствия:
+CI/наличие APK создают слишком сильный сигнал надёжности.
+
+Исправление:
+Обязательный test gate; разделить «собран» и «проверен». Добавить behavioral tests центральных гарантий, а не зеркала приватных методов.
+
+Повторная проверка:
+Имеющиеся тесты полезны для parser-регрессий. Их фактические результаты в этом окружении не получены, реальный CI-run не предоставлен.
+
+
+D1. Дополнительные наблюдения
+
+Они не повышены до отдельных HIGH и не использованы для искусственного увеличения top-10.
+
+1. Ввод до подключения сервиса.
+A/MainActivity.kt:151,215–219; A/ui/MainScreen.kt:140–144.
+UI показывает отправленное сообщение, но binder?.sendText при null ничего не делает. Bind асинхронен. Сценарий: отправить до подключения/при остановленном сервисе. Последствие: молча потерянная команда. Нужны ready-state и ack принятия либо блокировка отправки. CONFIRMED.
+
+2. Digest пропускает данные после ошибки.
+A/system/ChatsDigest.kt:28–37.
+Watermark продвигается до успешного LLM, текст ограничивается первыми 4000 символами. Повтор после сбоя не получает прежний набор; остаток truncation также может потеряться. Commit watermark после успеха и учёт непокрытого остатка. CONFIRMED.
+
+3. Восстановление encrypted storage может удалить ключи.
+E/security/SecretsStore.kt:73–78.
+Любое исключение открытия приводит к deleteSharedPreferences и повторному созданию. Возможна потеря данных при ошибке, не требующей удаления. Различать необратимое повреждение и временную ошибку. Код CONFIRMED; конкретный временный сбой POSSIBLE.
+
+4. UserMemory не имеет общего владельца и строгого полного предела.
+A/core/UserMemory.kt:37–54,116–130.
+Read-modify-write без сериализации допускает lost update; capacity вытесняет P3, но P1/P2 могут расти. Нужны сериализация, общий token budget и архивирование. Механизм CONFIRMED; фактический масштаб UNKNOWN.
+
+5. TTS редактора workflow.
+A/ui/workflow/WorkflowEditorActivity.kt:79.
+Создаётся TTSEngine; shutdown в lifecycle Activity не найден. Нужен owner-bound close. Отсутствие cleanup CONFIRMED; измеренная утечка UNKNOWN.
+
+6. Команда «нравится» может стать обратным toggle.
+A/system/SystemController.kt:101–105,185.
+Среди меток есть «Убрать из Мне нравится». При уже понравившемся треке такой клик отменяет желаемое состояние. Проверять текущее состояние и идемпотентную цель. Алгоритм CONFIRMED; внешний музыкальный UI не проверен.
+
+7. Скачивание APK.
+A/system/SystemController.kt:150–162.
+URL.openStream без явного общего deadline, размера и связи с cancel. Возможна долгая загрузка/рост файла. Нужны ограниченный transport, валидация и понятный системный consent. Ограничения CONFIRMED; фактическая установка UNKNOWN.
+
+8. Старый MediaProjection callback.
+A/system/ScreenCaptureManager.kt:109–110,173–199.
+onStop старой проекции вызывает глобальный stopSession. Если callback обработается после назначения новой session, он может закрыть новую. Проверять identity/generation. POSSIBLE, нужен тест расписания; ветка не подключена.
+
+9. Чувствительные поля Accessibility.
+A/system/AccessibilityAgent.kt:47–59.
+Явного фильтра чувствительных узлов нет. Реальное содержимое password-узла зависит от платформы/приложения; утечка пароля не доказана. Минимизировать данные, учитывать app/field policy и показывать облачного получателя.
+
+D2. Сценарии state machine A–J
+
+В исходниках нет доменных состояний CLOSING/PROCESSING/SPEAKING, событий Interrupt/SessionFailed/StartListening и SessionGate. Ниже названия трактуются как сценарии пользователя. Отсутствие конкретного класса не является дефектом само по себе.
+
+A. Пользователь начинает новую сессию до завершения старой.
+Ожидание: FIFO, reject или supersede с определённой изоляцией.
+Факт: новый текст запускает независимый handleTranscript. Голосовой collect последователен, но текст/overlay его обходят. A медленнее B → B выполняет действие → A выполняет позднее.
+Evidence: VoiceAgentService.kt:157,213,234; VA-05.
+CONFIRMED.
+
+B. Ответ приходит после отмены.
+Ожидание: transport cancel и допуск только актуального результата.
+Факт: WebSocket отсутствует. Отменённый withContext(IO) обычно отбрасывает результат благодаря prompt cancellation [S2], но HTTP продолжается. Новая текстовая команда старую не отменяет, поэтому её поздний результат может быть применён.
+Evidence: E/LLMClient.kt:105,242; VA-05/06.
+Различие CONFIRMED. WebSocket-сценарий N/A.
+
+C. Микрофон завис в CLOSING.
+Ожидание: ограниченный close, диагностируемая ошибка и запрет нового open до завершения.
+Факт: CLOSING не моделируется. release синхронно вызывает stop/shutdown без отдельного deadline. Если stop не вернулся, CAS уже выставлен; повторный release не гарантирует завершения первого.
+Evidence: E/STTEngine.kt:72–77,121–126.
+Отсутствие протокола CONFIRMED; реальное зависание Vosk POSSIBLE, не воспроизведено.
+
+D. Сеть возвращает ответ одновременно с Interrupt.
+Ожидание: чёткая точка допуска эффекта относительно interrupt.
+Факт: срочного Interrupt нет. «Стоп» не имеет отдельного preemptive канала к работающему голосовому запросу. Остановка сервиса отменяет Job, но уже начатые sync-эффекты не откатывает.
+Возможный порядок: A вышла из LLM → stop отменил job → A исполнила non-suspending effect до следующей проверки cancellation.
+Отсутствие гарантии CONFIRMED; конкретный эффект зависит от ветки.
+
+E. SessionFailed во время SPEAKING.
+Ожидание: ошибка завершает свой запрос, освобождает TTS и меняет доменное состояние.
+Факт: такого события нет. TTS onError/onStop возвращают Unit, как успешная речь. UI использует status/timer. Cancel speak вызывает tts.stop; Mutex освобождается.
+Evidence: E/TTSEngine.kt:58–75.
+CONFIRMED; неизбежное зависание Speaking не доказано.
+
+F. Потеря соединения в PROCESSING.
+Ожидание: bounded retry, понятный terminal result и возврат готовности.
+Факт: HTTPS IOException/429/5xx дают до трёх попыток. Голосовая session может уже отмениться на 20-й секунде и ждать blocking call. Durable queue/resume нет. После выхода voice loop имеет паузу 2 секунды.
+Evidence: E/LLMClient.kt:238–259; VoiceAgentService.kt:128–168.
+CONFIRMED.
+
+G. Многократный StartListening.
+Ожидание: один capture owner, идемпотентный start.
+Факт: такого intent нет. startListeningLoop проверяет активный listeningJob. Обычный onStartCommand не создаёт новый orchestrator при каждом вызове. Утверждение «каждый тап обязательно открывает новый микрофон» не подтверждается.
+Другие проблемы: независимые text launch и повторный lecture start.
+Guard CONFIRMED; гипотеза о множестве обычных voice loops отклонена.
+
+H. Старый callback после создания новой сессии.
+Ожидание: generation/identity принадлежность callback.
+Факт: STT callback связан со своим Flow; identity check не позволяет старому cleanup обнулить новый releaseCurrent. Но lecture onReady после stop безусловно запускает capture. Projection onStop потенциально закрывает новую session.
+Evidence: STTEngine.kt:151–154; LectureRecorder.kt:27–41; D1.8.
+Защита STT и дефект лекции CONFIRMED; projection POSSIBLE.
+
+I. Cancellation во время изменения состояния.
+Ожидание: разделение вычисления, commit и cleanup; отсутствие orphan jobs.
+Факт: handleTranscript/voice loop rethrow CancellationException. Но blocking HTTP продолжается, внешние эффекты не транзакционны, lecture scopes не дети service Job. Cancel не означает «всё остановилось».
+Evidence: VA-06/08/09.
+CONFIRMED.
+
+J. Два независимых потока обрабатывают события.
+Ожидание: сериализация history/pending и безопасный notification index.
+Факт: Default launch допускает параллельность. Два «да» читают один pending до clear; callback меняет HashMap во время replyTo; remember пересекается с history snapshot.
+Evidence: AgentOrchestrator.kt:112–117,182–184,683–687; NotificationReader.kt:60,88,100.
+CONFIRMED допустимые interleaving, не нагрузочное воспроизведение.
+
+Повторные события:
+Нет idempotency key для действия и request ID в AgentEvent. Повторная отправка — новая операция. Конкретное дублирование Vosk callbacks не воспроизведено; нельзя объявлять его установленным дефектом. Защита от повторного значимого эффекта отсутствует.
+
+StateFlow:
+Потокобезопасность value не обеспечивает согласованность нескольких сущностей. Статус «ответ» появляется до завершения TTS. Нужен единый snapshot доменного состояния с operation ID и состоянием ресурсов; UI должен наблюдать его, а не выводить факт исполнения из русских строк.
+
+D3. NETWORK AND BACKEND
+
+Активный LLMClient:
+— HTTPS POST, не WebSocket.
+— Connect timeout 20 секунд, read timeout 180 секунд.
+— Общего call deadline нет.
+— До трёх попыток для IOException/429/5xx.
+— Thread.sleep вместо отменяемого delay.
+— Call.cancel не связан с coroutine cancel.
+— Response закрывается через use.
+— Порядок определён внутри запроса, но не между независимыми UI-командами.
+— Нет session/generation/idempotency IDs.
+— Ответ читается целиком в строку; transport size cap не выявлен.
+— Обычному конечному HTTP heartbeat не требуется.
+
+Vanya + Python:
+— POST/SSE, не WebSocket.
+— Backend HTTPX: connect 10 секунд, read timeout 180 секунд; не общий deadline.
+— Android awaitClose вызывает Call.cancel — это реальная защита.
+— In-band error поддержан.
+— Clean EOF без terminal считается успехом (VA-20).
+— Нет reconnect/resume sequence.
+— Heartbeat отсутствует; влияние reverse proxy idle timeout зависит от deployment.
+— Channel.UNLIMITED между streaming и TTS допускает рост очереди:
+  A/system/VanyaAutomationEngine.kt:242–249.
+— Backend создаёт AsyncClient для каждого stream; реальный end-to-end cancellation через ASGI/proxy не проверен.
+
+При потере интернета:
+Активный путь ждёт и повторяет запрос, пока session timer отдельно отменяет обработчик. Потерянная команда автоматически не восстанавливается. Следующий запрос — новая попытка пользователя, не продолжение протокола.
+
+При задержке:
+Главный конфликт — короткий idle timer и длинная операция. Read timeout ограничивает паузу чтения, не суммарный срок всех попыток.
+
+Старый ответ:
+Формальной LLM-session нет. Поздний неотменённый ответ A может прийти после B. Действительно отменённый withContext защищён Kotlin cancellation; эти два случая не следует объединять.
+
+Python jobs:
+Status enum относится к демонстрационной очереди, не voice FSM. Jobs теряются при рестарте и не координируются между worker-процессами. Реального executor/cancel нет. Внедрение Celery или аналога оправдано только после определения workload.
+
+TLS:
+Прямой LLMClient использует HTTPS. Worker examples публикуют HTTP-порт, TLS termination не показан. Современный Android по умолчанию ограничивает cleartext, manifest глобально его не разрешает. Нельзя одновременно предполагать, что эта интеграция уже работает и что существует незашифрованный WebSocket. Перед подключением нужен проверенный HTTPS deployment.
+
+D4. ANDROID, SECURITY, PERFORMANCE
+
+Android integration:
+1. RECORD_AUDIO и foreground permissions объявлены. Сервис проверяет микрофон до promotion. Отзыв разрешений во время работы и OEM-политики не тестировались.
+2. BootReceiver пропускает API 34+, не обещая запрещённого microphone-start с boot.
+3. OnDestroy освобождает часть ресурсов, но Android не гарантирует его при process kill. Durable восстановления команды/лекции нет.
+4. Accessibility защищён системным permission. Клик по первой подходящей надписи/ancestor не проверяет ожидаемый package/window и постусловие.
+5. Notification Access/RemoteInput — работающая системная интеграция, но identity выбора дефектна.
+6. Overlay проверяет canDrawOverlays и использует main UI scope. Это не устраняет VA-10.
+7. MediaProjection имеет consent launcher, foreground type, callback перед VirtualDisplay и очистку token. Ветка dormant. Rotation/resize, revocation и старые callbacks требуют тестов [S12].
+8. Root ограничен фиксированными svc-командами. Выдача прав вынесена в явный пользовательский запрос с подтверждением. Произвольный shell от модели не найден.
+9. Установка через системные intent/installer — не доказательство silent install. Consent, package provenance и реальная работоспособность не проверены.
+
+По актуальной документации Android 17 background playback/audio focus/изменение громкости требуют видимую Activity или допустимый foreground service для всех приложений на этой версии. Дополнительное WIU-требование относится к target 37 [S13]. У проекта target 35 и основной FGS есть, поэтому отдельный гарантированный Android 17 отказ не заявляется. После остановки сервиса и при повышении target эти условия должны проверяться отдельно.
+
+Android не гарантирует стабильность текста/координат/дерева чужого UI. dispatchGesture без callback результата не доказывает выполнение задачи. Нужны предусловия и проверка результата.
+
+Данные и границы:
+— API-ключи штатно в encrypted preferences/Keystore; возможна подстановка в BuildConfig при сборке. Вшитый APK-key извлекаем при распространении APK.
+— Plaintext backup создаёт дополнительное небезопасное хранилище (VA-04).
+— Vosk локален, но транскрипты передаются в LLM для обработки.
+— Raw audio в исследованном lecture-пути не сохраняется.
+— Последние 30 команд сохраняются в обычных SharedPreferences:
+  A/ui/CommandHistory.kt:16–36.
+  Утверждение «разговоры совсем не хранятся» слишком широко.
+— Accessibility text по команде может отправляться в облако; screenshot-stream только в dormant ветке.
+— Digest уведомлений не фильтрует явно OTP/чувствительные пакеты.
+— Проекты сохраняются внутри приложения и как ZIP в Downloads; revise передаёт содержимое модели.
+— CrashLogger хранит исключения; полного централизованного логирования всех HTTP-тел не найдено. Ошибки могут содержать фрагменты ответа; нужны redaction/retention.
+
+Pattern scan не обнаружил в архиве похожих на действующие API-ключей, Telegram-токенов и PEM private keys. Это не доказательство отсутствия всех секретов: Git history и внешние build variables недоступны. Секреты целиком не выводились.
+
+LLM имеет ограниченный allowlist, но внутри него отсутствует достаточная связь с текущим разрешённым намерением. Системное Accessibility-разрешение означает возможность, а не согласие на каждую отправку или клик. Локальная app-role не заменяет этот контроль.
+
+Производительность:
+CONFIRMED структурные риски:
+— main-thread waitFor в Diagnostics;
+— blocking HTTP/sleep и продолжение работы после cancel;
+— независимые text jobs без общей границы;
+— orphan lecture scopes;
+— история UI без явного лимита;
+— отсутствие строгого общего prompt budget;
+— unlimited stream→TTS очередь dormant engine.
+LIKELY: native Vosk lifetime, требует проверки версии.
+
+UNKNOWN без профилирования:
+CPU Vosk/wake word, расход батареи за сутки, thermal throttling, PSS/native heap, startup latency, dropped frames, стоимость Compose recomposition. Объявлять Compose «медленным» или приводить выдуманные мегабайты утечки нельзя.
+
+Профилирование полезнее после исправления ownership: иначе измеряется смесь нормальной работы и дефектных повторов/очередей.
+
+D5. TESTING AND RELIABILITY
+
+Выполненные безопасные проверки:
+
+1. Проверены ZIP entries; traversal/symlink entries не обнаружены.
+2. Исходные файлы сопоставлены с архивом.
+3. AST parse и встроенная компиляция двух Python-файлов — синтаксис корректен.
+4. Разобраны 14 XML и TOML — формат корректен.
+5. bash -n для wrapper и двух shell-скриптов — синтаксис корректен; сами скрипты не выполнялись.
+6. Pattern scan секретов — совпадений действующих ключей указанных форматов не найдено.
+7. Синтетическая filesystem-проверка ../notes — выход из project root подтверждён.
+8. Реальные FileProvider XML + synthetic filesDir — backup path не покрыт.
+9. Оба backup XML — экспорт явно не исключён.
+10. Реальное тело require_auth с тестовыми границами — default token принят, неверный даёт 401.
+11. Реальное тело chat_stream с fake upstream — clean EOF без DONE превращается в успешный DONE.
+
+Диагностический harness создан вне исходного проекта. Python endpoint bodies извлекались AST; decorators и внешние зависимости заменены boundary doubles. Это не полноценный запуск FastAPI, HTTPX или Android. Платных LLM-вызовов, отправки сообщений, root-команд на телефоне и чтения приватных данных не выполнялось.
+
+Ограничения среды:
+Java runtime 17 есть, полного JDK/javac, Android SDK, adb, Kotlin compiler, установленного Gradle/готового distribution нет. Wrapper есть, но запуск потребовал бы загрузки инструментов. Backend FastAPI/HTTPX/pytest-зависимости отсутствуют.
+
+НЕ выполнялись:
+assemble, Gradle unit tests, lint, instrumentation, emulator/device tests, полный backend server test, нагрузочные тесты, native heap/CPU/battery profiling.
+Отсутствие синтаксических ошибок не считается доказательством правильности.
+
+assets/model-ru-small отсутствует в архиве. Предусмотрены отдельная загрузка и CI-подготовка. Это build/runtime prerequisite; само по себе отсутствие большого model asset в исходном ZIP не является архитектурным дефектом. APK без подготовки модели не запустит данный STT.
+
+Реальные тесты:
+AgentParsingTest — 7 методов: yes/no, приоритет отрицания, границы слов, Claude prefix, action JSON, grant phrase, plain text.
+JsonExtractionTest — 5 методов: JSON fences/tails, braces/escaping внутри строк, отсутствие JSON.
+
+Не найдено тестов:
+orchestrator, cancellation, microphone lifecycle, lecture persistence, project sandbox, backup, overlay, FGS, recipient identity, backend routes.
+
+Parser-тест извлечения action из текста подтверждает реализованное поведение, но не безопасность этого поведения. Сборка APK не проверяет допустимость побочного эффекта.
+
+Минимальный набор новых проверок:
+
+P0:
+1. Ограниченный API smoke test для поддерживаемых model IDs и response schema.
+2. JSON-пример в информационном ответе не вызывает ни одного эффекта.
+3. Read/write sandbox: ../, absolute, nested traversal и существующий чужой каталог отвергаются до чтения/сети.
+4. Лекция сохраняется до LLM; offline stop и restart сохраняют транскрипт.
+
+P1:
+5. A медленнее B, cancel одновременно с completion, два подтверждения: заданная политика порядка, максимум один effect, stale generation rejected.
+6. Локальный сервер удерживает HTTP: cancel закрывает Call и job в ограниченный срок, не запускает retry.
+7. Lecture start/start/stop/late-onReady: current не подменяется, после stop capture не открывается.
+8. Audio ownership: нет запрещённого STT/TTS перекрытия; реальный speaker/mic-тест принятого режима.
+9. Overlay show/hide/show, addView failure, revoke permission — без crash/orphan view.
+10. FGS actual type/timeout на API 35+, background audio API 37; fake зависающий su не блокирует main.
+11. Два одинаковых имени в разных чатах требуют выбора; malformed backup не меняет ни одного поля, export имеет узкий рабочий URI.
+
+P2:
+12. Workflow cycle/disconnected/error → Failed; SSE EOF до terminal → incomplete.
+
+Небольшие injectable interfaces для transport, clock, audio, effect executor и repository дадут воспроизводимость без облака. Один последовательный coroutine scheduler не обнаружит все data race; нужны controlled barriers и отдельные многопоточные сценарии.
+
+D6. Обязательная повторная проверка выводов
+
+Гипотеза: Claude спасает все запросы.
+Контраргумент: review после успешного DeepSeek, прямой Claude отдельный.
+Итог: VA-01 сохранён, фактический HTTP-отказ LIKELY.
+
+Гипотеза: ProjectStorage полностью защищён.
+Контраргумент: canonical guard только в save.
+Итог: VA-03 сохранён; arbitrary write не заявляется.
+
+Гипотеза: encrypted preferences устраняют backup-риск.
+Контраргумент: export в другом plaintext-файле вне exclusions.
+Итог: VA-04 сохранён.
+
+Гипотеза: 20 секунд — только ожидание пользователя.
+Контраргумент: session включает весь handleTranscript.
+Итог: VA-06 сохранён.
+
+Гипотеза: любой отменённый HTTP-ответ попадёт новой сессии.
+Контраргумент: withContext prompt cancellation.
+Итог: обобщение отклонено; остаются uncancelled transport и параллельные неотменённые команды.
+
+Гипотеза: TTS Mutex сериализует оркестратор.
+Контраргумент: защищает только speak.
+Итог: VA-05 сохранён.
+
+Гипотеза: listening guard защищает повторную лекцию.
+Контраргумент: current заменён до guard.
+Итог: VA-09 сохранён.
+
+Гипотеза: recorder catch защищает сохранение.
+Контраргумент: summarize/save выполняются в другой coroutine.
+Итог: VA-08 сохранён.
+
+Гипотеза: overlay получает новый owner.
+Контраргумент: owner val, новая только View.
+Итог: VA-10 сохранён.
+
+Гипотеза: сервис microphone не имеет dataSync-limit.
+Контраргумент: manifest содержит оба типа, subset не выбран.
+Итог: VA-11 сохранён с условиями runtime/target.
+
+Гипотеза: произвольный root-shell от LLM.
+Контраргумент: фиксированные commands и отдельный ручной grant.
+Итог: не подтверждено.
+
+Гипотеза: native double-free доказан.
+Контраргумент: CAS release; точная версия недоступна.
+Итог: double-free не заявлен; leak LIKELY.
+
+Гипотеза: сломан WebSocket reconnect.
+Контраргумент: WebSocket отсутствует.
+Итог: такой дефект не заявлен; анализируются HTTP/SSE.
+
+============================================================
+E. ENGINEERING SCORECARD
+============================================================
+
+Оценки относятся к наблюдаемому snapshot, не к автору. 5/10 — частично рабочая база с существенными пробелами; 8/10 — обоснованная надёжность основных сценариев. Средний балл не вычисляется: безопасность и сохранность нельзя компенсировать красивым UI.
+
+1. Архитектура — 4/10.
+Полезная граница app/ai-engines и feature-классы. Перегруженный orchestrator, разрозненный lifecycle, активный/альтернативный пути не объединены контрактом.
+
+2. Качество Kotlin — 5/10.
+Есть use, Flow, Mutex, CAS и чистые parsers. Проблемы blocking IO, ownership, global mutable state и failure semantics. Сборка не подтверждена.
+
+3. Управление состояниями — 2/10.
+Pending-поля/таймеры вместо согласованного протокола; нет session identity и связанных consent/terminal semantics.
+
+4. Concurrency safety — 2/10.
+Показаны interleaving общих данных и orphan jobs. Локальные защиты не покрывают весь сценарий.
+
+5. Сетевая надёжность — 3/10.
+HTTPS, response cleanup, retries есть. Model contract сомнителен, cancellation неполная, deadline конфликтует с работой, SSE неверно трактует EOF.
+
+6. Безопасность — 3/10.
+Encrypted keys и root/write allowlists полезны. Read traversal, plaintext export, action parsing и recipient identity нарушают границы.
+
+7. Производительность — N/A.
+Без профилирования честный числовой балл невозможен. Статические риски перечислены отдельно.
+
+8. Тестируемость — 4/10.
+Парсеры доступны для JVM-тестов, реальные эффекты тесно связаны с Android и конкретными зависимостями. Нужны узкие seams, не обязательная смена архитектурного шаблона.
+
+9. Поддерживаемость — 4/10.
+Каталоги читаемы; comments/обещания расходятся с кодом, string actions/global state увеличивают стоимость изменений.
+
+10. Production readiness — 2/10.
+Нет подтверждённой сборки/устройства; есть потеря данных, lifecycle и command-boundary дефекты; CI не блокирует failed tests.
+
+Архитектурная оценка:
+Проблема не в недостатке слоёв, а в неопределённом владельце состояния и эффектов. Orchestrator смешивает диалог, сеть, память, consent, файлы и действия чужих приложений. Это ухудшает cohesion и failure isolation.
+
+Разделять следует по причинам:
+— session owner для порядка/отмены;
+— trusted executor для policy/result;
+— lecture storage для независимости сохранности от сети;
+— injectable transport/audio/clock для тестов.
+
+Clean Architecture, MVVM, DI-framework и массовое дробление модулей не являются автоматическим решением. Event bus полезен для уведомления UI, но слаб как command/consent channel без корреляции и ownership.
+
+============================================================
+F. TOP 10 ENGINEERING RISKS
+============================================================
+
+1. Основной LLM-route может не работать из-за model IDs — VA-01.
+2. Текстовый ответ может исполнять непрошеное действие — VA-02.
+3. Read traversal и plaintext backup образуют путь раскрытия данных — VA-03/04.
+4. Параллельные команды/подтверждения дают неожиданный порядок и повторные эффекты — VA-05.
+5. Idle cancel и STT/TTS overlap ломают обычный диалог — VA-06/07.
+6. Лекция теряется при сетевом сбое/process death — VA-08.
+7. Lecture ownership допускает подмену/запись после stop — VA-09.
+8. Повторный overlay может завершить приложение — VA-10.
+9. dataSync-limit прекращает длительную фоновую работу — VA-11.
+10. Сообщение может уйти в другой разговор — VA-13.
+
+Root diagnostics остаётся важным HIGH на устройствах с root. Worker/default-token нужно исправить до deployment, но публичная экспозиция и активная Android-интеграция не подтверждены.
+
+============================================================
+G. REMEDIATION ROADMAP
+============================================================
+
+Это рекомендации, не выполненные изменения.
+Сложность: S — примерно 1–2 инженерных дня; M — несколько дней; L — около 1–2 недель с регрессионными тестами.
+Оценки предварительные для опытного инженера при наличии SDK, устройства и тестовых доступов. Это не обещание календарного срока.
+
+P0 — немедленно, до работы с ценными данными
+
+P0.1 Проверить/восстановить LLM contract.
+Польза: основной сценарий снова работоспособен.
+Сложность: S–M.
+Зависимости: тестовый ключ, текущий API contract.
+Готовность: ordinary/complex/direct-Claude маршруты проверены; unsupported model диагностируется; smoke test ограничен по расходам.
+
+P0.2 Закрыть read traversal и исключить секреты из prompt.
+Польза: прекращает чтение/передачу посторонних файлов.
+Сложность: S–M.
+Зависимости: независима от session refactor.
+Готовность: traversal/absolute paths отклонены до чтения/сети; project ID берётся из реестра; размер ограничен.
+
+P0.3 Trusted action boundary и recipient identity.
+Польза: примеры не исполняются, сообщения уходят согласованному получателю.
+Сложность: M–L.
+Зависимости: определить риск и контракт каждого action.
+Готовность: информационный ответ не создаёт effects; payload/recipient/request ID связаны с одноразовым consent; stale consent отвергается.
+
+P0.4 Сохранять лекцию до сети.
+Польза: нет потери исходника при LLM failure.
+Сложность: M.
+Зависимости: формат durable chunks/checkpoint.
+Готовность: offline stop и process restart сохраняют текст; summary можно повторить независимо.
+
+P0.5 Исправить backup export/import.
+Польза: защищённый и рабочий перенос настроек.
+Сложность: M.
+Зависимости: формат шифрования/temporary sharing.
+Готовность: узкий рабочий URI, отсутствие plaintext-остатка/backup inclusion, failed import не меняет данные.
+
+P1 — до расширенного пользовательского тестирования
+
+P1.1 Один session state owner.
+Польза: порядок, отмена и pending становятся определёнными.
+Сложность: L.
+Зависимости: FIFO/reject/supersede contract.
+Готовность: A–J имеют согласованные результаты; stale result не исполняет effect; confirmation применяется максимум один раз.
+
+P1.2 Cancellable HTTP и отдельные timeout.
+Польза: быстрый cancel без потери долгих легитимных запросов.
+Сложность: M.
+Зависимости: session contract, injectable clock/transport.
+Готовность: idle не отменяет Processing/Speaking; Call закрывается по cancel; отменённый запрос не retry.
+
+P1.3 Audio ownership и lecture lifecycle.
+Польза: нет capture после stop, подмены записи и неконтролируемого самоэха.
+Сложность: L.
+Зависимости: session owner и durable lecture.
+Готовность: start/start/stop/late-onReady, реальное устройство с динамиком; выбранный half-duplex/barge-in проверен.
+
+P1.4 Overlay, FGS type и root diagnostics.
+Польза: устраняет обычные crash/ANR/background отказы.
+Сложность: M.
+Зависимости: API 35+ device и fake su.
+Готовность: многократный show/hide устойчив; actual FGS type корректен; timeout обработан; main не ждёт external process.
+
+P1.5 Проверить ресурсы и Vosk 0.3.45.
+Польза: исключает resource drift/orphan jobs.
+Сложность: M.
+Зависимости: точный artifact/source и profiler.
+Готовность: у engine/scope есть owner/close, native allocations не растут необъяснимо, double-close исключён.
+
+P1.6 Обязательные CI gates.
+Польза: known regression не попадает в проверенный APK.
+Сложность: S–M.
+Зависимости: build environment и behavioral tests.
+Готовность: failed tests блокируют публикацию; сборка/lint/выбранные lifecycle-tests воспроизводимы, STT asset подготовлен.
+
+P2 — завершение функций и сопровождение
+
+P2.1 Typed action results, workflow validation, app resolver.
+Польза: нет ложного успеха/молча пропущенных действий.
+Сложность: M.
+Зависимости: trusted executor.
+Готовность: cycle/disconnected/exception → Failed; launcher query корректен; неоднозначность обрабатывается.
+
+P2.2 UI ready/ack и структурированная наблюдаемость.
+Польза: пользователь видит реальное принятие/завершение.
+Сложность: M.
+Зависимости: state owner.
+Готовность: ввод до bind не теряется, request ID/phase/result доступны без секретов, recreation не искажает состояние.
+
+P2.3 Digest и memory consistency.
+Польза: нет пропусков и lost updates.
+Сложность: M.
+Зависимости: storage policy.
+Готовность: watermark после успеха, truncation remainder сохранён, сериализованные updates, общий prompt budget.
+
+P2.4 Определить судьбу SSE/capture/messenger.
+Польза: реальные функции соответствуют заявленным.
+Сложность: M–L.
+Зависимости: продуктовый выбор основного маршрута.
+Готовность: один проверенный end-to-end flow либо явный experimental статус.
+
+P2.5 Backend hardening до подключения.
+Польза: безопасный deployment и корректные stream errors.
+Сложность: M.
+Зависимости: реальная схема hosting.
+Готовность: startup запрещает примерный token; HTTPS; input/concurrency/queue limits; EOF не success; 401/429 не polling storm.
+
+P3 — необязательные оптимизации после корректности
+
+P3.1 CPU/battery/native heap/startup/Compose profiling.
+Польза: оптимизация реального bottleneck.
+Сложность: M.
+Зависимости: стабильные P0/P1 и целевые устройства.
+Готовность: baseline, воспроизводимый сценарий и измеренный выигрыш без регрессии.
+
+P3.2 UI-history, disk retention, streaming queue limits.
+Польза: предсказуемые ресурсы в долгой работе.
+Сложность: S–M.
+Зависимости: профили нагрузки.
+Готовность: определены пределы/очистка, длительный сценарий укладывается в бюджет.
+
+P3.3 Документация и экспериментальные ветки.
+Польза: меньше неверных обещаний и неясных точек расширения.
+Сложность: S–M.
+Зависимости: перечень поддерживаемых функций.
+Готовность: README/manifest/wiring совпадают с фактическими путями; у компонентов понятны вход и owner.
+
+Не стоит начинать с WebSocket, нового DI-framework или полной перестройки модулей: эти изменения сами не устраняют найденные дефекты.
+
+============================================================
+H. FINAL VERDICT
+============================================================
+
+1. Насколько качественно спроектирован проект?
+Как расширенный прототип — есть реальные и локально осмысленные реализации. Как надёжный персональный агент — недостаточно определены state ownership, lifecycle, action authorization и сохранность данных.
+
+2. Самые уязвимые части?
+VoiceAgentService → AgentOrchestrator → LLMClient; lecture persistence/lifecycle; project reader/backup; NotificationReader recipient selection; overlay lifecycle. Worker нельзя публиковать с default-конфигурацией.
+
+3. Удачные решения?
+Локальный STT, app/ai-engines boundary, TTS Mutex, CAS release, canonical write guard, encrypted runtime secrets, fixed root commands, штатный RemoteInput и pure parser tests. Их следует сохранить.
+
+4. Незавершённые части?
+Session orchestration отсутствует; SSE/Vanya/capture не включены в основной UX; bot wiring не завершён, WhatsApp не подключён, MAX предполагает контракт; backend jobs — stub. Лекции/workflow/backup реализованы, но дефектны, а не просто TODO.
+
+5. Можно ли безопасно продолжать разработку?
+Да, в контролируемой среде и с исправлением P0/P1. Текущий snapshot нельзя считать безопасным автономным помощником для важных отправок, секретов и единственной копии лекции.
+
+6. Нужен ли частичный рефакторинг?
+Да: единый owner session/audio, cancellable transport, durable lecture storage, trusted action executor. Переписывать все UI и feature-классы не требуется.
+
+7. Нужен ли масштабный redesign?
+Полная перепись не обоснована. Пересмотр нескольких центральных контрактов необходим. Масштабную Android/backend перестройку следует рассматривать при новых требованиях, например multi-user server, durable distributed workflows или continuous multimodal streaming.
+
+8. Три действия с максимальной пользой:
+Первое: управляемый центральный запрос — актуальный API contract, session/request identity, порядок, корректные timeout и transport/audio cancellation.
+Второе: независимость данных от сети — durable lecture, правильный recorder lifecycle, закрытый reader sandbox и защищённый backup.
+Третье: проверяемые effects — отделение action от текста, точный recipient/consent и обязательные behavioral regression gates.
+
+ОБЪЕКТИВНОЕ ЗАКЛЮЧЕНИЕ:
+VoiceAgent-v2 — расширенный прототип с работающими интеграциями, который пока не обеспечивает предсказуемое завершение команд, устойчивое владение микрофоном, сохранность лекций и достаточный контроль значимых действий. Разработку продолжать целесообразно. Постоянное автономное использование следует отложить до исправления P0/P1 и подтверждения поведения на устройстве. Исходный код в рамках аудита не изменён.
+
+============================================================
+ПЕРВИЧНЫЕ ИСТОЧНИКИ ПЛАТФОРМЕННЫХ КОНТРАКТОВ
+============================================================
+
+[S1] DeepSeek API Change Log, запись 2026-04-24:
+https://api-docs.deepseek.com/updates/
+Указана дата прекращения legacy model IDs 2026-07-24. Авторизованный вызов не выполнялся.
+
+[S2] Kotlin coroutines — withContext:
+https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html
+Prompt cancellation при возврате между dispatchers.
+
+[S3] Android — Foreground service timeouts:
+https://developer.android.com/develop/background-work/services/fgs/timeout
+
+[S4] Android — Service API:
+https://developer.android.com/reference/android/app/Service
+
+[S5] Android — Auto Backup:
+https://developer.android.com/identity/data/autobackup
+
+[S6] AndroidX — SavedStateRegistryController:
+https://developer.android.com/reference/androidx/savedstate/SavedStateRegistryController
+
+[S7] Android — Sharing a file:
+https://developer.android.com/training/secure-file-sharing/share-file
+
+[S8] Android — PackageManager:
+https://developer.android.com/reference/android/content/pm/PackageManager
+
+[S9] Vosk upstream:
+https://github.com/alphacep/vosk-api/blob/master/android/lib/src/main/java/org/vosk/android/SpeechService.java
+https://github.com/alphacep/vosk-api/blob/master/java/lib/src/main/java/org/vosk/Recognizer.java
+Изучен master, не доказано точное соответствие версии 0.3.45.
+
+[S10] Claude model overview:
+https://platform.claude.com/docs/en/about-claude/models/overview
+
+[S11] DeepSeek vision и актуальные модели:
+https://api-docs.deepseek.com/guides/vision/
+https://api-docs.deepseek.com/quick_start/pricing/
+
+[S12] Android — Media projection:
+https://developer.android.com/media/grow/media-projection
+
+[S13] Android 17 — Background audio hardening:
+https://developer.android.com/about/versions/17/changes/bg-audio
+
+Источники использованы для внешних контрактов, не вместо анализа репозитория. После изменения платформ/API требуется повторная проверка соответствующих выводов.
+
+

@@ -1,0 +1,6 @@
+# Скопируй в local.properties (в git не попадает). sdk.dir Android Studio проставит сам.
+sdk.dir=C\:\\Users\\<ИМЯ>\\AppData\\Local\\Android\\Sdk
+DEEPSEEK_API_KEY=
+TELEGRAM_BOT_TOKEN=
+MAX_SERVICE_TOKEN=
+MAX_COMMUNITY_ID=

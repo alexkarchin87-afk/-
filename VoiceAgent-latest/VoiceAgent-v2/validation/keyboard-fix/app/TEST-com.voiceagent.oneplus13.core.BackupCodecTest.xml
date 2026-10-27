@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.core.BackupCodecTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-26T05:06:38" hostname="ac7b89ae9c6b" time="1.621">
+  <properties/>
+  <testcase name="randomSaltAndNonce" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="1.053"/>
+  <testcase name="acceptsLegacyFacts" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.001"/>
+  <testcase name="rejectsAttackerKdfCost" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.146"/>
+  <testcase name="rejectsWeakExportPassword" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.001"/>
+  <testcase name="wrongPasswordFails" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.155"/>
+  <testcase name="validatesCompleteBackupBeforeMutation" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.001"/>
+  <testcase name="tamperingFailsAuthentication" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.141"/>
+  <testcase name="rejectsUnknownVersionsKeysAndBadTypes" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.001"/>
+  <testcase name="authenticatedEncryptionRoundTrip" classname="com.voiceagent.oneplus13.core.BackupCodecTest" time="0.121"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

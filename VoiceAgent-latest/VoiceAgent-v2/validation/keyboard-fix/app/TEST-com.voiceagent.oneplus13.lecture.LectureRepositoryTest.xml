@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-26T05:06:40" hostname="ac7b89ae9c6b" time="0.013">
+  <properties/>
+  <testcase name="latestIsByRecordingTimeAndDoesNotReturnAnOlderSummary" classname="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" time="0.005"/>
+  <testcase name="interruptedAtomicWriteKeepsLastCommittedCheckpoint" classname="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" time="0.003"/>
+  <testcase name="freshRepositoryRecoversEveryFieldAndUnicodeChunk" classname="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" time="0.001"/>
+  <testcase name="rejectsTraversalAndOutsideSymlink" classname="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" time="0.001"/>
+  <testcase name="mirrorFailureDoesNotUndoCommittedText" classname="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" time="0.001"/>
+  <testcase name="legacyTranscriptAndAtomicFileBackupRemainReadable" classname="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" time="0.001"/>
+  <testcase name="malformedCheckpointIsReportedWithoutDeletingAnything" classname="com.voiceagent.oneplus13.lecture.LectureRepositoryTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

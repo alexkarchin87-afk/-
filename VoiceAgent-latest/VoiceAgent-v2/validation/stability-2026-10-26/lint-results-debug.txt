@@ -1,0 +1,106 @@
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/MainActivity.kt:203: Warning: Use of REQUEST_IGNORE_BATTERY_OPTIMIZATIONS violates the Play Store Content Policy regarding acceptable use cases, as described in https://developer.android.com/training/monitoring-device-state/doze-standby.html [BatteryLife]
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "BatteryLife":
+   This issue flags code that either
+   * negatively affects battery life, or
+   * uses APIs that have recently changed behavior to prevent background tasks
+   from consuming memory and battery excessively.
+
+   Generally, you should be using WorkManager instead.
+
+   For more details on how to update your code, please see
+   https://developer.android.com/topic/performance/background-optimization
+
+
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt:285: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+fun StatusPill(phase: AgentPhase, statusText: String, onClick: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+                                                                                     ~~~~~~~~
+
+   Explanation for issues of type "ModifierParameter":
+   The first (or only) Modifier parameter in a Composable function should
+   follow the following rules:
+   - Be named modifier
+   - Have a type of Modifier
+   - Either have no default value, or have a default value of Modifier
+   - If optional, be the first optional parameter in the parameter list
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/system/Diagnostics.kt:107: Warning: Unnecessary; SDK_INT is never < 26 [ObsoleteSdkInt]
+        val ignoring = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayBubbleController.kt:191: Warning: Unnecessary; SDK_INT is always >= 26 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/VoiceAgentApp.kt:20: Warning: Unnecessary; SDK_INT is always >= 26 [ObsoleteSdkInt]
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/res/mipmap-anydpi-v26: Warning: This folder configuration (v26) is unnecessary; minSdkVersion is 26. Merge all the resources in this folder into mipmap-anydpi. [ObsoleteSdkInt]
+
+   Explanation for issues of type "ObsoleteSdkInt":
+   This check flags version checks that are not necessary, because the
+   minSdkVersion (or surrounding known API level) is already at least as high
+   as the version checked for.
+
+   Similarly, it also looks for resources in -vNN folders, such as values-v14
+   where the version qualifier is less than or equal to the minSdkVersion,
+   where the contents should be merged into the best folder.
+
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/SettingsActivity.kt:373: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var refresh by remember { mutableStateOf(0) }
+                              ~~~~~~~~~~~~~~
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/ui/workflow/WorkflowEditorActivity.kt:104: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var refreshTick by remember { mutableStateOf(0) }
+                                  ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "AutoboxingStateCreation":
+   Calling mutableStateOf<T>() when T is either backed by a primitive type on
+   the JVM or is a value class results in a state implementation that requires
+   all state values to be boxed. This usually causes an additional allocation
+   for each state write, and adds some additional work to auto-unbox values
+   when reading the value of the state. Instead, prefer to use a specialized
+   primitive state implementation for Int, Long, Float, and Double when the
+   state does not need to track null values and does not override the default
+   SnapshotMutationPolicy. See mutableIntStateOf(), mutableLongStateOf(),
+   mutableFloatStateOf(), and mutableDoubleStateOf() for more information.
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.runtime
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+/workspace/voiceagent-fix/VoiceAgent-v2/app/src/main/res/values/strings.xml:7: Warning: The resource R.string.notif_thinking appears to be unused [UnusedResources]
+    <string name="notif_thinking">Обрабатываю запрос…</string>
+            ~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UnusedResources":
+   Unused resources make applications larger and slow down builds.
+
+
+   The unused resource check can ignore tests. If you want to include
+   resources that are only referenced from tests, consider packaging them in a
+   test source set instead.
+
+   You can include test sources in the unused resource check by setting the
+   system property lint.unused-resources.include-tests =true, and to exclude
+   them (usually for performance reasons), use
+   lint.unused-resources.exclude-tests =true.
+   ,
+
+/workspace/voiceagent-fix/VoiceAgent-v2/app/build.gradle.kts:117: Warning: Use version catalog instead [UseTomlInstead]
+    testImplementation("org.mockito:mockito-core:5.14.2")
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/voiceagent-fix/VoiceAgent-v2/app/build.gradle.kts:118: Warning: Use version catalog instead [UseTomlInstead]
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UseTomlInstead":
+   If your project is using a libs.versions.toml file, you should place all
+   Gradle dependencies in the TOML file. This lint check looks for version
+   declarations outside of the TOML file and suggests moving them (and in the
+   IDE, provides a quickfix to performing the operation automatically).
+
+0 errors, 9 warnings

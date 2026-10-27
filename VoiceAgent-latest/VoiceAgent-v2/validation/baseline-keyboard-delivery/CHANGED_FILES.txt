@@ -1,0 +1,11 @@
+Изменения относительно VoiceAgent-v2-STABILITY-2026-10-26.zip:
+app/src/main/AndroidManifest.xml
+app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt
+app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayBubbleController.kt
+app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayPosition.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt
+app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt
+app/src/test/java/com/voiceagent/oneplus13/overlay/OverlayPositionTest.kt
+
+Документы: FIX_REPORT.md, TEST_RESULTS.md, KEYBOARD_TEST.md, MODEL_UPLOAD.md, CHANGED_FILES.txt, KEYBOARD_FIX.patch, PACKAGING_CHECKS.json; доказательства validation/keyboard-fix.
