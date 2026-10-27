@@ -91,6 +91,8 @@ class Runtime:
                     value = None
                 elif action == 'submit':
                     value = self.engine.submit('desktop', *args)
+                elif action == 'new_chat':
+                    value = self.store.create_chat('desktop', args[0])
                 elif action == 'approval':
                     value = self.engine.decide(args[0], 'desktop', args[1])
                 elif action == 'cancel':
