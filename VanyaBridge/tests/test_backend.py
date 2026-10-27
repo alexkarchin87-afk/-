@@ -339,3 +339,33 @@ def test_api_auth_origin_size_and_device_isolation(store):
 @pytest.mark.parametrize('url', ['http://example.com', 'https://127.0.0.1', 'https://user:password@example.com', 'https://192.168.0.1'])
 def test_browser_blocks_private_urls(url):
     with pytest.raises(ValueError): asyncio.run(public_https(url))
+
+
+def test_cancelled_download_cannot_apply_wallpaper(store):
+    class LateDownloader(FakeTool):
+        def __init__(self):
+            super().__init__()
+            self.started = asyncio.Event()
+
+        async def download_selection(self, image_id):
+            self.started.set()
+            try:
+                await asyncio.sleep(100)
+            except asyncio.CancelledError:
+                return 'late.png'
+
+    async def run():
+        browser = LateDownloader()
+        system = FakeTool()
+        engine = Engine(store, browser, system)
+        engine.permissions['wallpaper'] = True
+        task = submit(engine, 'установи обои image:123')
+        await asyncio.sleep(0)
+        engine.decide(task['id'], 'desktop', True)
+        await browser.started.wait()
+        engine.cancel(task['id'], 'desktop')
+        await settle(engine)
+        assert task['state'] == 'CANCELLED'
+        assert system.calls == []
+
+    asyncio.run(run())
