@@ -86,3 +86,31 @@ def test_ui_keyboard_settings_pairing_and_restart(tmp_path, monkeypatch):
     finally:
         window.apply_theme(initial if 'initial' in locals() else 'dark')
         window.close(); app.processEvents()
+
+
+def test_ui_remains_responsive_and_can_cancel_slow_task(tmp_path):
+    import asyncio
+    app = QApplication.instance() or QApplication([])
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
+    runtime = Runtime(port=port, data=tmp_path); runtime.start()
+    class SlowSystem:
+        async def execute(self, action, argument):
+            await asyncio.sleep(10)
+            return {'text': 'late'}
+    runtime.loop.call_soon_threadsafe(setattr, runtime.engine, 'system', SlowSystem())
+    window = Desktop(runtime); window.show()
+    try:
+        wait(app, lambda: window.active is not None, 'initial chat')
+        window.composer.setPlainText('статус'); window.submit()
+        wait(app, lambda: button(window, 'Отменить'), 'slow task')
+        window.findChild(QPushButton, 'newChat').click()
+        wait(app, lambda: window.active != 'legacy' and window.chats.currentItem() and window.chats.currentItem().data(Qt.UserRole)==window.active, 'UI during slow task')
+        for i in range(window.chats.count()):
+            if window.chats.item(i).data(Qt.UserRole) == 'legacy':
+                window.chats.setCurrentRow(i); break
+        wait(app, lambda: window.active == 'legacy' and button(window, 'Отменить'), 'return to slow task')
+        button(window, 'Отменить').click()
+        wait(app, lambda: any(t['state']=='CANCELLED' for c in window.data['chats'] for t in c['tasks']), 'cancel')
+    finally:
+        window.close(); app.processEvents()
