@@ -105,6 +105,9 @@ class Engine:
                     argument = plan.argument
                     if plan.action == 'wallpaper' and argument.startswith('image:'):
                         argument = await self.browser.download_selection(argument[6:])
+                        # A downloader may swallow cancellation; never apply a late result.
+                        if asyncio.current_task().cancelling() or task['state'] == 'CANCELLED':
+                            raise asyncio.CancelledError()
                         # Permission can be revoked while download is in flight.
                         if not self.permissions[plan.action]:
                             raise ValueError('Разрешение отозвано')

@@ -1,0 +1,64 @@
+name: VanyaBridge Windows build
+on:
+  push:
+    branches: [codex/vanya-windows-release]
+  pull_request:
+    paths: ['VanyaBridge/**', '.github/workflows/vanyabridge-windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: VanyaBridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt pyinstaller==6.16.0
+      - name: Run Python tests
+        run: python -m pytest -q
+      - name: Build Windows GUI
+        run: python -m PyInstaller --noconfirm --clean --onedir --windowed --name VanyaBridge --collect-all playwright --collect-submodules uvicorn desktop_entry.py
+      - name: Smoke test packaged GUI and local status command
+        shell: pwsh
+        run: |
+          $env:VANYA_SMOKE_REPORT = Join-Path $env:RUNNER_TEMP 'vanya-smoke.txt'
+          $process = Start-Process -FilePath (Resolve-Path dist/VanyaBridge/VanyaBridge.exe) -ArgumentList '--smoke-test' -PassThru
+          if (!$process.WaitForExit(45000)) { Stop-Process -Id $process.Id -Force; throw 'EXE smoke test timed out' }
+          if ($process.ExitCode -ne 0) { if (Test-Path $env:VANYA_SMOKE_REPORT) { Get-Content $env:VANYA_SMOKE_REPORT }; throw "EXE smoke test failed: $($process.ExitCode)" }
+      - name: Check binary and installer compiler
+        shell: pwsh
+        run: |
+          if (!(Test-Path dist/VanyaBridge/VanyaBridge.exe)) { throw 'EXE missing' }
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $compiler)) { throw 'Inno Setup compiler missing' }
+          & $compiler installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+          if (!(Test-Path installer-output/VanyaBridge-Setup.exe)) { throw 'Installer missing' }
+      - name: Test installed application launch and uninstall
+        shell: pwsh
+        run: ./validation/installed-launch.ps1
+      - name: Upload desktop screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-validation
+          path: ${{ runner.temp }}/vanya-desktop.png
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: VanyaBridge-Windows-x64
+          path: |
+            VanyaBridge/dist/VanyaBridge/
+            VanyaBridge/installer-output/VanyaBridge-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
