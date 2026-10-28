@@ -1,7 +1,7 @@
 name: VanyaBridge Windows build
 on:
   push:
-    branches: [codex/vanya-chat-ui]
+    branches: [codex/vanya-local-agent]
   pull_request:
     paths: ['VanyaBridge/**', '.github/workflows/vanyabridge-windows.yml']
   workflow_dispatch:
@@ -46,6 +46,11 @@ jobs:
       - name: Test installed application launch and uninstall
         shell: pwsh
         run: ./validation/installed-launch.ps1
+      - name: Exercise Windows tools on runner
+        shell: pwsh
+        run: |
+          python -m validation.real_actions | Tee-Object -FilePath "$env:RUNNER_TEMP/vanya-real-actions.txt"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows tool exercise failed' }
       - name: Upload desktop screenshot
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,6 +59,7 @@ jobs:
           path: |
             ${{ runner.temp }}/vanya-desktop.png
             ${{ runner.temp }}/vanya-chat-confirmation.png
+            ${{ runner.temp }}/vanya-real-actions.txt
           if-no-files-found: ignore
           retention-days: 14
       - name: Upload binaries

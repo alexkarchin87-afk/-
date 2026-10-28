@@ -29,10 +29,13 @@ def run_smoke():
             first=window.active
             window.composer.setPlainText('статус'); window.submit()
             wait(lambda:any(c['id']==first and c['tasks'] and c['tasks'][0]['state']=='COMPLETED' for c in window.data['chats']),'status')
+            (runtime.root / 'smoke.txt').write_text('test', encoding='utf-8')
+            window.composer.setPlainText('покажи файлы'); window.submit()
+            wait(lambda:any(c['id']==first and len(c['tasks'])>=2 and c['tasks'][-1]['state']=='COMPLETED' and any(f['name']=='smoke.txt' for f in (c['tasks'][-1].get('result') or {}).get('files',[])) for c in window.data['chats']), 'file listing')
             window.runtime.call('permission','launch',True)
             wait(lambda:window.data['permissions']['launch'],'permission')
             window.composer.setPlainText('открой VS Code'); window.submit()
-            wait(lambda:any(c['id']==first and len(c['tasks'])>=2 and c['tasks'][-1]['state']=='WAITING_APPROVAL' for c in window.data['chats']),'approval card')
+            wait(lambda:any(c['id']==first and len(c['tasks'])>=3 and c['tasks'][-1]['state']=='WAITING_APPROVAL' for c in window.data['chats']),'approval card')
             wait(lambda:any(b.text()=='Отклонить' for b in window.feed.findChildren(QPushButton)),'decline button')
             report=os.environ.get('VANYA_SCREENSHOT')
             if report: window.grab().save(report)
@@ -53,5 +56,5 @@ def run_smoke():
             restarted.call('snapshot'); action,value=restarted.messages.get(timeout=10)
             assert action=='snapshot'
             chats={c['id']:c for c in value['chats']}
-            assert second in chats and first in chats and len(chats[first]['tasks'])==2
+            assert second in chats and first in chats and len(chats[first]['tasks'])==3
         finally: restarted.stop()

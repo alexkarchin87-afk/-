@@ -8,6 +8,7 @@ from pathlib import Path
 import uvicorn
 
 from backend.agents.browser import BrowserAgent
+from backend.agents.local_llm import LocalLLM
 from backend.agents.system import SystemAgent
 from backend.api import create_app
 from backend.engine import Engine
@@ -81,6 +82,10 @@ class Runtime:
                 if action == 'snapshot':
                     value = self.engine.snapshot()
                     value.update(pending=self.pairing.list_pending(), devices=self.store.devices(), logs=self.store.logs(), chats=self.store.chat_snapshot())
+                elif action == 'set_llm':
+                    model = args[0].strip()
+                    self.engine.local_llm = LocalLLM(model) if model else None
+                    value = model
                 elif action == 'new_chat':
                     value = self.store.new_chat()
                 elif action == 'chat_submit':

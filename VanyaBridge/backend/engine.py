@@ -4,7 +4,7 @@ import time
 import uuid
 from dataclasses import asdict
 
-from backend.agents.planner import Planner
+from backend.agents.planner import Planner, UnsupportedCommand
 
 LOG = logging.getLogger('vanyabridge')
 TERMINAL = {'COMPLETED', 'FAILED', 'CANCELLED'}
@@ -18,6 +18,8 @@ class Engine:
         self.timeout, self.approval_timeout = timeout, approval_timeout
         self.tasks, self.workers, self.approvals = {}, {}, {}
         self.permissions = {a: a in ('list_files', 'status', 'search_images', 'read_page') for a in ACTIONS}
+        self.local_llm = None
+        self.llm_lock = asyncio.Lock()
         self.lock = asyncio.Lock()  # One executing tool at a time on a low-memory PC.
 
     def emit(self, task, agent, text, state=None):
@@ -88,7 +90,23 @@ class Engine:
         tid = task['id']
         try:
             self.emit(task, 'Planner', 'Проверяю поддерживаемую команду', 'PLANNING')
-            plan = self.planner.plan(task['input'], task['mode'])
+            try:
+                plan = self.planner.plan(task['input'], task['mode'])
+            except UnsupportedCommand:
+                if self.local_llm is None:
+                    raise
+                self.emit(task, 'LocalLLM', 'Готовлю ответ локальной модели', 'RUNNING')
+                messages = [{'role': 'system', 'content': 'Ты текстовый помощник. У тебя нет доступа к инструментам или компьютеру. Не утверждай, что выполнил действие.'}]
+                messages.extend(self.store.llm_context(task.get('chat_id'), tid))
+                messages.append({'role': 'user', 'content': task['input']})
+                async with asyncio.timeout(120):
+                    async with self.llm_lock:
+                        reply = await self.local_llm.respond(messages)
+                if asyncio.current_task().cancelling() or task['state'] == 'CANCELLED':
+                    raise asyncio.CancelledError()
+                task['result'] = {'text': reply, 'source': 'local_llm'}
+                self.emit(task, 'LocalLLM', reply, 'COMPLETED')
+                return
             task['plan'] = asdict(plan)
             if not self.permissions[plan.action]:
                 raise ValueError('Действие выключено в разрешениях на ПК: ' + plan.action)
@@ -118,6 +136,8 @@ class Engine:
                     # Discard late values even if a tool accidentally swallowed cancellation.
                     if asyncio.current_task().cancelling() or task['state'] == 'CANCELLED':
                         raise asyncio.CancelledError()
+                    if not isinstance(result, dict) or not isinstance(result.get('text'), str) or not result['text'].strip():
+                        raise ValueError('Инструмент не вернул корректный результат')
                     task['result'] = result
                     self.emit(task, plan.agent, result.get('text', 'Завершено'), 'COMPLETED')
         except asyncio.CancelledError:

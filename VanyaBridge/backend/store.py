@@ -77,6 +77,19 @@ class Store:
             chat['tasks'] = [json.loads(row[0]) for row in rows]
         return chats
 
+    def llm_context(self, chat_id, before_task):
+        if chat_id is None:
+            return []
+        rows = self.db.execute('SELECT tasks.body FROM tasks JOIN chat_tasks ON tasks.id=chat_tasks.task_id WHERE chat_tasks.chat_id=? ORDER BY tasks.created DESC LIMIT 30', (chat_id,))
+        pairs = []
+        for row in rows:
+            task = json.loads(row[0]); result = task.get('result') or {}
+            if task['id'] != before_task and task['owner'] == 'desktop' and task['state'] == 'COMPLETED' and result.get('source') == 'local_llm':
+                pairs.append((task['input'][:2000], result.get('text', '')[:2000]))
+                if len(pairs) >= 4: break
+        return [item for user, answer in reversed(pairs) for item in (
+            {'role': 'user', 'content': user}, {'role': 'assistant', 'content': answer})]
+
     def title_chat(self, chat_id, text):
         self.db.execute("UPDATE chats SET title=? WHERE id=? AND title='Новый чат'", (text.strip().replace('\n', ' ')[:45], chat_id))
         self.db.commit()

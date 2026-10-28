@@ -9,6 +9,10 @@ class Plan:
     approval: bool = False
 
 
+class UnsupportedCommand(ValueError):
+    pass
+
+
 class Planner:
     """An intentionally small grammar, not a neural network."""
     def plan(self, text: str, mode: str) -> Plan:
@@ -40,6 +44,6 @@ class Planner:
                 if not argument:
                     raise ValueError('Не указан аргумент команды')
                 return Plan(agent, action, argument, approval)
-        raise ValueError('Команда не поддерживается локальным планировщиком. Это не ответ LLM. '
+        raise UnsupportedCommand('Команда не поддерживается локальным планировщиком. Это не ответ LLM. '
                          'Попробуйте «покажи файлы», «открой VS Code», «найди изображения гор». '
                          'Можно вручную перенести запрос в официальный ChatGPT.')

@@ -50,6 +50,8 @@ class Desktop(QMainWindow):
         self.data = None; self.active = None; self.waiting_submit = False
         self.render_key = None; self.nav_key = None; self.pair_code = 'Код ещё не создан'
         self.settings = QSettings('VanyaBridge', 'Desktop')
+        self.llm_model = str(self.settings.value('llm_model', ''))
+        if self.llm_model: self.runtime.call('set_llm', self.llm_model)
         self.setWindowTitle('Ваня — VanyaBridge'); self.resize(1100, 760); self.setMinimumSize(680, 500)
         root = QWidget(); self.setCentralWidget(root); h = QHBoxLayout(root); h.setContentsMargins(0,0,0,0); h.setSpacing(0)
         self.sidebar = QFrame(); self.sidebar.setObjectName('sidebar'); self.sidebar.setFixedWidth(250)
@@ -123,6 +125,9 @@ class Desktop(QMainWindow):
                     self.waiting_submit=False
                     if self.composer.toPlainText().strip() == value['input']:
                         self.composer.clear()
+                elif action == 'set_llm':
+                    self.llm_model=value; self.settings.setValue('llm_model', value)
+                    self.settings_key=None; self.render_settings()
                 elif action == 'pair_code': self.pair_code='Одноразовый код: '+value; self.render_settings()
                 elif action == 'error':
                     self.waiting_submit=False; QMessageBox.warning(self,'Ваня',value)
@@ -162,7 +167,7 @@ class Desktop(QMainWindow):
         self.render_key=key; clear_layout(self.feed_layout)
         if not tasks:
             self.feed_layout.addStretch(1); self.feed_layout.addWidget(label('Чем я могу помочь?', 'title'),0,Qt.AlignHCenter)
-            self.feed_layout.addWidget(label('Попробуй: «статус компьютера» или «покажи файлы».\nСейчас доступны команды, свободный диалог пока не подключён.', 'subtle'),0,Qt.AlignHCenter); self.feed_layout.addStretch(1)
+            self.feed_layout.addWidget(label('Попробуй: «статус компьютера» или «покажи файлы».\nСвободный диалог доступен после настройки локальной модели.', 'subtle'),0,Qt.AlignHCenter); self.feed_layout.addStretch(1)
         for task in tasks:
             self.card(task['input'],'userBubble','right')
             messages=task.get('messages',[]); state=task['state']; result=task.get('result') or {}
@@ -176,6 +181,8 @@ class Desktop(QMainWindow):
                 box.addLayout(buttons)
             else:
                 box=self.card(txt,'answerBubble','left')
+                if result.get('source') == 'local_llm':
+                    box.addWidget(label('Ответ локальной модели · действия не выполнялись','subtle'))
                 if 'free_disk_bytes' in result:
                     box.addWidget(label('Свободно на диске: {:.1f} ГБ'.format(result['free_disk_bytes']/1_000_000_000)))
                 if result.get('files'): box.addWidget(label('\n'.join(f["name"] for f in result['files'])))
@@ -193,13 +200,18 @@ class Desktop(QMainWindow):
     def render_settings(self):
         if not self.data or self.pages.currentIndex()!=1: return
         # Rebuild only on actual changes, preserving scroll and user interactions.
-        key=repr((self.data['permissions'],self.data['pending'],self.data['devices'],self.data['logs'],self.pair_code,self.theme))
+        key=repr((self.data['permissions'],self.data['pending'],self.data['devices'],self.data['logs'],self.pair_code,self.theme,self.llm_model))
         if getattr(self,'settings_key',None)==key: return
         self.settings_key=key; clear_layout(self.settings_layout)
         back=QPushButton('←  Вернуться в чат'); back.clicked.connect(lambda:self.pages.setCurrentIndex(0)); self.settings_layout.addWidget(back)
         sc=QScrollArea(); sc.setWidgetResizable(True); holder=QWidget(); body=QVBoxLayout(holder); body.setSpacing(12)
         body.addWidget(label('Настройки', 'title'))
         theme=QPushButton('Тема: '+('тёмная' if self.theme=='dark' else 'светлая')+'  ·  переключить'); theme.clicked.connect(self.toggle_theme); body.addWidget(theme)
+        body.addWidget(label('Локальная модель', 'title'))
+        body.addWidget(label('Необязательно: запусти Ollama на этом компьютере и введи имя установленной локальной модели. Ваня отправляет запросы на 127.0.0.1:11434; сам Ollama должен быть настроен без облачной переадресации. Модель отвечает текстом и не запускает действия.', 'subtle'))
+        model=QLineEdit(self.llm_model); model.setPlaceholderText('Имя модели, например qwen2.5:3b'); body.addWidget(model)
+        model_row=QHBoxLayout(); save_model=QPushButton('Сохранить модель'); save_model.clicked.connect(lambda:self.runtime.call('set_llm',model.text())); model_row.addWidget(save_model)
+        disable_model=QPushButton('Отключить модель'); disable_model.clicked.connect(lambda:self.runtime.call('set_llm','')); model_row.addWidget(disable_model); body.addLayout(model_row)
         body.addWidget(label('Разрешения', 'title')); body.addWidget(label('Действия требуют отдельного подтверждения. После перезапуска разрешения сбрасываются.','subtle'))
         for name in ACTIONS:
             check=QCheckBox(PERMISSIONS[name]); check.setChecked(self.data['permissions'][name]); check.toggled.connect(lambda v,n=name:self.runtime.call('permission',n,v)); body.addWidget(check)
@@ -218,7 +230,7 @@ class Desktop(QMainWindow):
             body.addWidget(label(device['name']+(' · активно' if device['active'] else ' · отозвано')))
             if device['active']:
                 b=QPushButton('Отозвать доступ'); b.clicked.connect(lambda checked=False,i=device['id']:self.runtime.call('revoke',i)); body.addWidget(b)
-        body.addWidget(label('Диагностика','title')); body.addWidget(label('Папка: '+str(self.runtime.root)+'\nLLM не подключён. Режим работает по ограниченным командам.\nЖурнал событий:\n'+'\n'.join(str(row) for row in self.data['logs'][-20:]),'subtle'))
+        body.addWidget(label('Диагностика','title')); body.addWidget(label('Папка: '+str(self.runtime.root)+'\nЛокальная модель: '+(self.llm_model or 'не настроена')+'\nЖурнал событий:\n'+'\n'.join(str(row) for row in self.data['logs'][-20:]),'subtle'))
         body.addStretch(1); sc.setWidget(holder); self.settings_layout.addWidget(sc)
 
     def toggle_theme(self):
