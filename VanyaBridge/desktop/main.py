@@ -48,7 +48,7 @@ class Desktop(QMainWindow):
     def __init__(self, runtime):
         super().__init__(); self.runtime = runtime
         self.data = None; self.active = None; self.waiting_submit = False
-        self.render_key = None; self.nav_key = None; self.pair_code = 'Код ещё не создан'
+        self.render_key = None; self.rendered_chat = None; self.nav_key = None; self.pair_code = 'Код ещё не создан'
         self.settings = QSettings('VanyaBridge', 'Desktop')
         self.llm_model = str(self.settings.value('llm_model', ''))
         if self.llm_model: self.runtime.call('set_llm', self.llm_model)
@@ -158,13 +158,13 @@ class Desktop(QMainWindow):
         if not self.data or not self.active: return
         chat=next((c for c in self.data['chats'] if c['id']==self.active),None)
         if not chat: return
-        key=(self.active,repr(chat['tasks']))
+        key=self.active
         self.title.setText(chat['title'])
         tasks=chat['tasks']
         current=next((t for state in ('WAITING_APPROVAL','RUNNING','PLANNING','IDLE') for t in reversed(tasks) if t['state']==state), tasks[-1] if tasks else None)
         self.status.setText(STATES.get(current['state'],'Готов') if current else 'Готов')
-        if self.render_key==key: return
-        self.render_key=key; clear_layout(self.feed_layout)
+        if self.render_key==key and self.rendered_chat is chat: return
+        self.render_key=key; self.rendered_chat=chat; clear_layout(self.feed_layout)
         if not tasks:
             self.feed_layout.addStretch(1); self.feed_layout.addWidget(label('Чем я могу помочь?', 'title'),0,Qt.AlignHCenter)
             self.feed_layout.addWidget(label('Попробуй: «статус компьютера» или «покажи файлы».\nСвободный диалог доступен после настройки локальной модели.', 'subtle'),0,Qt.AlignHCenter); self.feed_layout.addStretch(1)

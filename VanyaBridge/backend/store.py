@@ -11,6 +11,7 @@ class Store:
     """Called only on the server event loop; device tokens are stored hashed."""
     def __init__(self, path: Path):
         self.db = sqlite3.connect(path)
+        self._chat_cache = None
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.executescript('''
         CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, name TEXT, hash TEXT UNIQUE, active INTEGER);
@@ -59,22 +60,27 @@ class Store:
         self.db.execute('INSERT OR IGNORE INTO chat_tasks VALUES (?,?)',
                         (task['id'], task.get('chat_id') or 'legacy'))
         self.db.commit()
+        self._chat_cache = None
 
     def new_chat(self):
         chat = {'id': uuid.uuid4().hex, 'title': 'Новый чат', 'created': time.time()}
         self.db.execute('INSERT INTO chats VALUES (?,?,?)', (chat['id'], chat['title'], chat['created']))
         self.db.commit()
+        self._chat_cache = None
         return chat
 
     def chat_exists(self, chat_id):
         return self.db.execute('SELECT 1 FROM chats WHERE id=?', (chat_id,)).fetchone() is not None
 
     def chat_snapshot(self):
+        if self._chat_cache is not None:
+            return self._chat_cache
         chats = [dict(zip(('id', 'title', 'created'), row)) for row in self.db.execute(
             'SELECT id,title,created FROM chats ORDER BY created DESC')]
         for chat in chats:
             rows = self.db.execute('SELECT tasks.body FROM tasks JOIN chat_tasks ON tasks.id=chat_tasks.task_id WHERE chat_tasks.chat_id=? ORDER BY tasks.created', (chat['id'],))
             chat['tasks'] = [json.loads(row[0]) for row in rows]
+        self._chat_cache = chats
         return chats
 
     def llm_context(self, chat_id, before_task):
@@ -93,6 +99,7 @@ class Store:
     def title_chat(self, chat_id, text):
         self.db.execute("UPDATE chats SET title=? WHERE id=? AND title='Новый чат'", (text.strip().replace('\n', ' ')[:45], chat_id))
         self.db.commit()
+        self._chat_cache = None
 
     def history(self, owner='desktop'):
         rows = self.db.execute('SELECT body FROM tasks WHERE owner=? OR ?=? ORDER BY created DESC LIMIT 50',
