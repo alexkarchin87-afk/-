@@ -46,6 +46,14 @@ jobs:
       - name: Test installed application launch and uninstall
         shell: pwsh
         run: ./validation/installed-launch.ps1
+      - name: Install VS Code for Windows tool test
+        shell: pwsh
+        run: |
+          $code = Join-Path $env:ProgramFiles 'Microsoft VS Code/Code.exe'
+          if (!(Test-Path $code)) {
+            choco install vscode --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { Write-Warning "VS Code installation failed; the actual tool check will report it." }
+          }
       - name: Exercise Windows tools on runner
         shell: pwsh
         run: |
