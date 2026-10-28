@@ -42,6 +42,17 @@ jobs:
           & $compiler installer.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
           if (!(Test-Path installer-output/VanyaBridge-Setup.exe)) { throw 'Installer missing' }
+      - name: Test installed application launch and uninstall
+        shell: pwsh
+        run: ./validation/installed-launch.ps1
+      - name: Upload desktop screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-validation
+          path: ${{ runner.temp }}/vanya-desktop.png
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
