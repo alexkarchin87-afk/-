@@ -3,6 +3,7 @@ import json
 import secrets
 import sqlite3
 import time
+import uuid
 from pathlib import Path
 
 
@@ -16,6 +17,13 @@ class Store:
         CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, owner TEXT, created REAL, body TEXT);
         CREATE TABLE IF NOT EXISTS audit(at REAL, task TEXT, event TEXT);
         ''')
+        self.db.executescript('''
+        CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, title TEXT NOT NULL, created REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS chat_tasks(task_id TEXT PRIMARY KEY, chat_id TEXT NOT NULL);
+        ''')
+        self.db.execute("INSERT OR IGNORE INTO chats VALUES ('legacy', 'Предыдущие задачи', 0)")
+        self.db.execute("INSERT OR IGNORE INTO chat_tasks SELECT id, 'legacy' FROM tasks")
+        self.db.commit()
         # Interrupted tasks never resume privileged actions after restart.
         for tid, body in self.db.execute('SELECT id, body FROM tasks').fetchall():
             task = json.loads(body)
@@ -48,6 +56,29 @@ class Store:
     def save(self, task):
         self.db.execute('INSERT OR REPLACE INTO tasks VALUES(?,?,?,?)',
                         (task['id'], task['owner'], task['created'], json.dumps(task, ensure_ascii=False)))
+        self.db.execute('INSERT OR IGNORE INTO chat_tasks VALUES (?,?)',
+                        (task['id'], task.get('chat_id') or 'legacy'))
+        self.db.commit()
+
+    def new_chat(self):
+        chat = {'id': uuid.uuid4().hex, 'title': 'Новый чат', 'created': time.time()}
+        self.db.execute('INSERT INTO chats VALUES (?,?,?)', (chat['id'], chat['title'], chat['created']))
+        self.db.commit()
+        return chat
+
+    def chat_exists(self, chat_id):
+        return self.db.execute('SELECT 1 FROM chats WHERE id=?', (chat_id,)).fetchone() is not None
+
+    def chat_snapshot(self):
+        chats = [dict(zip(('id', 'title', 'created'), row)) for row in self.db.execute(
+            'SELECT id,title,created FROM chats ORDER BY created DESC')]
+        for chat in chats:
+            rows = self.db.execute('SELECT tasks.body FROM tasks JOIN chat_tasks ON tasks.id=chat_tasks.task_id WHERE chat_tasks.chat_id=? ORDER BY tasks.created', (chat['id'],))
+            chat['tasks'] = [json.loads(row[0]) for row in rows]
+        return chats
+
+    def title_chat(self, chat_id, text):
+        self.db.execute("UPDATE chats SET title=? WHERE id=? AND title='Новый чат'", (text.strip().replace('\n', ' ')[:45], chat_id))
         self.db.commit()
 
     def history(self, owner='desktop'):

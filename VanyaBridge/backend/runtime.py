@@ -80,7 +80,13 @@ class Runtime:
             try:
                 if action == 'snapshot':
                     value = self.engine.snapshot()
-                    value.update(pending=self.pairing.list_pending(), devices=self.store.devices(), logs=self.store.logs())
+                    value.update(pending=self.pairing.list_pending(), devices=self.store.devices(), logs=self.store.logs(), chats=self.store.chat_snapshot())
+                elif action == 'new_chat':
+                    value = self.store.new_chat()
+                elif action == 'chat_submit':
+                    chat_id, text, mode, rid = args
+                    value = self.engine.submit('desktop', text, mode, rid, chat_id)
+                    self.store.title_chat(chat_id, text)
                 elif action == 'pair_code':
                     value = self.pairing.rotate()
                 elif action == 'pair_decide':

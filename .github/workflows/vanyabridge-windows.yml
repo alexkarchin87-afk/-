@@ -1,7 +1,7 @@
 name: VanyaBridge Windows build
 on:
   push:
-    branches: [codex/vanya-windows-release]
+    branches: [codex/vanya-chat-ui]
   pull_request:
     paths: ['VanyaBridge/**', '.github/workflows/vanyabridge-windows.yml']
   workflow_dispatch:
@@ -30,6 +30,7 @@ jobs:
         shell: pwsh
         run: |
           $env:VANYA_SMOKE_REPORT = Join-Path $env:RUNNER_TEMP 'vanya-smoke.txt'
+          $env:VANYA_SCREENSHOT = Join-Path $env:RUNNER_TEMP 'vanya-chat-confirmation.png'
           $process = Start-Process -FilePath (Resolve-Path dist/VanyaBridge/VanyaBridge.exe) -ArgumentList '--smoke-test' -PassThru
           if (!$process.WaitForExit(45000)) { Stop-Process -Id $process.Id -Force; throw 'EXE smoke test timed out' }
           if ($process.ExitCode -ne 0) { if (Test-Path $env:VANYA_SMOKE_REPORT) { Get-Content $env:VANYA_SMOKE_REPORT }; throw "EXE smoke test failed: $($process.ExitCode)" }
@@ -50,7 +51,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-desktop-validation
-          path: ${{ runner.temp }}/vanya-desktop.png
+          path: |
+            ${{ runner.temp }}/vanya-desktop.png
+            ${{ runner.temp }}/vanya-chat-confirmation.png
           if-no-files-found: ignore
           retention-days: 14
       - name: Upload binaries

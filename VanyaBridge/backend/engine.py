@@ -29,10 +29,12 @@ class Engine:
             self.store.audit(task['id'], state)
             LOG.info('task=%s state=%s', task['id'], state)
 
-    def submit(self, owner, text, mode, request_id):
+    def submit(self, owner, text, mode, request_id, chat_id=None):
         if not text.strip() or len(text) > 2000 or mode not in ('Ultra Free', 'Standard'):
             raise ValueError('Недопустимая команда или режим')
         uuid.UUID(request_id)
+        if chat_id is not None and (owner != 'desktop' or not self.store.chat_exists(chat_id)):
+            raise ValueError('Чат недоступен')
         tid = request_id
         existing = self.tasks.get(tid)
         if not existing:
@@ -41,7 +43,7 @@ class Engine:
                 import json
                 existing = json.loads(row[0])
         if existing:
-            if existing['owner'] != owner or existing['input'] != text or existing['mode'] != mode:
+            if existing['owner'] != owner or existing['input'] != text or existing['mode'] != mode or existing.get('chat_id') != chat_id:
                 raise ValueError('Идентификатор запроса уже использован')
             return existing  # Network retry never re-executes an accepted command.
         if sum(t['state'] not in TERMINAL for t in self.tasks.values()) >= 8:
@@ -52,7 +54,7 @@ class Engine:
             if self.tasks[old_id]['state'] in TERMINAL:
                 del self.tasks[old_id]
         task = dict(id=tid, owner=owner, input=text, mode=mode, created=time.time(), state='IDLE',
-                    messages=[], result=None, plan=None)
+                    messages=[], result=None, plan=None, chat_id=chat_id)
         self.tasks[tid] = task
         self.store.save(task)
         worker = asyncio.create_task(self.run(task))
