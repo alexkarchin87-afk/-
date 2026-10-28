@@ -110,7 +110,6 @@ class Desktop(QMainWindow):
         if not text or not self.active or self.waiting_submit: return
         self.waiting_submit=True
         self.runtime.call('chat_submit', self.active, text, 'Ultra Free', str(uuid.uuid4()))
-        if self.composer.toPlainText().strip() == text: self.composer.clear()
 
     def poll(self):
         try:
@@ -120,7 +119,10 @@ class Desktop(QMainWindow):
                     self.data=value; self.update_nav(); self.render()
                     if self.pages.currentIndex()==1: self.render_settings()
                 elif action == 'new_chat': self.active=value['id']; self.nav_key=None
-                elif action == 'chat_submit': self.waiting_submit=False
+                elif action == 'chat_submit':
+                    self.waiting_submit=False
+                    if self.composer.toPlainText().strip() == value['input']:
+                        self.composer.clear()
                 elif action == 'pair_code': self.pair_code='Одноразовый код: '+value; self.render_settings()
                 elif action == 'error':
                     self.waiting_submit=False; QMessageBox.warning(self,'Ваня',value)
@@ -153,7 +155,9 @@ class Desktop(QMainWindow):
         if not chat: return
         key=(self.active,repr(chat['tasks']))
         self.title.setText(chat['title'])
-        tasks=chat['tasks']; self.status.setText(STATES.get(tasks[-1]['state'],'Готов') if tasks else 'Готов')
+        tasks=chat['tasks']
+        current=next((t for state in ('WAITING_APPROVAL','RUNNING','PLANNING','IDLE') for t in reversed(tasks) if t['state']==state), tasks[-1] if tasks else None)
+        self.status.setText(STATES.get(current['state'],'Готов') if current else 'Готов')
         if self.render_key==key: return
         self.render_key=key; clear_layout(self.feed_layout)
         if not tasks:
@@ -200,7 +204,9 @@ class Desktop(QMainWindow):
         for name in ACTIONS:
             check=QCheckBox(PERMISSIONS[name]); check.setChecked(self.data['permissions'][name]); check.toggled.connect(lambda v,n=name:self.runtime.call('permission',n,v)); body.addWidget(check)
         body.addWidget(label('Подключение Android','title'))
-        body.addWidget(label('Адрес: https://'+self.runtime.host+':'+str(self.runtime.port)+'\nОтпечаток SHA-256: '+self.runtime.fingerprint+'\nДля телефона нужен запуск с частным LAN-адресом.'))
+        connection=label('Адрес: https://'+self.runtime.host+':'+str(self.runtime.port)+'\nОтпечаток SHA-256: '+self.runtime.fingerprint+'\nДля телефона нужен запуск с частным LAN-адресом.')
+        connection.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        body.addWidget(connection)
         body.addWidget(label(self.pair_code)); code=QPushButton('Создать одноразовый код'); code.clicked.connect(lambda:self.runtime.call('pair_code')); body.addWidget(code)
         for pending in self.data['pending']:
             body.addWidget(label('Запрос: '+pending['name']))
