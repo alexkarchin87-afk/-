@@ -195,7 +195,7 @@ class Desktop(QMainWindow):
                 if state in ('IDLE','PLANNING','RUNNING'):
                     cancel=QPushButton('Отменить'); cancel.clicked.connect(lambda checked=False,tid=task['id']:self.runtime.call('cancel',tid)); actions.addWidget(cancel)
                 actions.addStretch(1); box.addLayout(actions)
-        self.feed_layout.addStretch(1); QTimer.singleShot(0,lambda:self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum()))
+        self.feed_layout.addStretch(1); QTimer.singleShot(100,lambda:self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum()))
 
     def render_settings(self):
         if not self.data or self.pages.currentIndex()!=1: return

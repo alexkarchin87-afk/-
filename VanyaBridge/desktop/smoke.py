@@ -37,6 +37,10 @@ def run_smoke():
             window.composer.setPlainText('открой VS Code'); window.submit()
             wait(lambda:any(c['id']==first and len(c['tasks'])>=3 and c['tasks'][-1]['state']=='WAITING_APPROVAL' for c in window.data['chats']),'approval card')
             wait(lambda:any(b.text()=='Отклонить' for b in window.feed.findChildren(QPushButton)),'decline button')
+            wait(lambda:window.scroll.verticalScrollBar().value() == window.scroll.verticalScrollBar().maximum(), 'scroll to newest message')
+            for _ in range(10):
+                app.processEvents(); time.sleep(.05)
+            assert window.scroll.verticalScrollBar().value() == window.scroll.verticalScrollBar().maximum()
             report=os.environ.get('VANYA_SCREENSHOT')
             if report: window.grab().save(report)
             next(b for b in window.feed.findChildren(QPushButton) if b.text()=='Отклонить').click()
