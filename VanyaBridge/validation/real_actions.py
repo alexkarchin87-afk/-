@@ -39,4 +39,4 @@ async def run(root):
 if __name__=='__main__':
     if os.name != 'nt': raise SystemExit('Windows runner required')
     with tempfile.TemporaryDirectory(prefix='vanya-real-actions-') as directory:
-        print(json.dumps(asyncio.run(run(Path(directory))),ensure_ascii=False,indent=2))
+        print(json.dumps(asyncio.run(run(Path(directory))),ensure_ascii=True,indent=2))
