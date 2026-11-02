@@ -1,0 +1,161 @@
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+Checking the license for package Android SDK Platform-Tools in /workspace/voiceagent-tools/android-sdk/licenses
+Warning: License for package Android SDK Platform-Tools not accepted.
+WARNING: platform-tools package is not installed. Please accept the installation licence to continue
+
+> Task :projects
+
+Projects:
+
+------------------------------------------------------------
+Root project 'VoiceAgent'
+------------------------------------------------------------
+
+Root project 'VoiceAgent'
++--- Project ':app'
+\--- Project ':core'
+     \--- Project ':core:ai-engines'
+
+To see a list of the tasks of a project, run gradle <project-path>:tasks
+For example, try running gradle :app:tasks
+
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:genVoskUuid
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :app:generateDebugBuildConfig
+> Task :core:ai-engines:preBuild UP-TO-DATE
+> Task :core:ai-engines:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugResValues
+> Task :core:ai-engines:generateDebugResValues
+> Task :core:ai-engines:writeDebugAarMetadata
+> Task :core:ai-engines:generateDebugResources
+> Task :app:checkDebugAarMetadata
+> Task :core:ai-engines:packageDebugResources
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:mergeDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :core:ai-engines:extractDeepLinksDebug
+> Task :core:ai-engines:compileDebugLibraryResources
+> Task :core:ai-engines:parseDebugLocalResources
+> Task :core:ai-engines:processDebugManifest
+> Task :core:ai-engines:generateDebugRFile
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :core:ai-engines:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:ai-engines:generateDebugBuildConfig
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+> Task :core:ai-engines:javaPreCompileDebug
+> Task :app:javaPreCompileDebug
+> Task :app:preDebugUnitTestBuild
+> Task :app:javaPreCompileDebugUnitTest
+> Task :core:ai-engines:preDebugUnitTestBuild UP-TO-DATE
+> Task :core:ai-engines:generateDebugUnitTestStubRFile
+> Task :core:ai-engines:javaPreCompileDebugUnitTest
+> Task :core:ai-engines:mergeDebugJniLibFolders
+> Task :core:ai-engines:mergeDebugNativeLibs NO-SOURCE
+> Task :core:ai-engines:stripDebugDebugSymbols NO-SOURCE
+> Task :core:ai-engines:copyDebugJniLibsProjectAndLocalJars
+> Task :core:ai-engines:extractDeepLinksForAarDebug
+> Task :core:ai-engines:mergeDebugShaders
+> Task :core:ai-engines:compileDebugShaders NO-SOURCE
+> Task :core:ai-engines:generateDebugAssets UP-TO-DATE
+> Task :core:ai-engines:packageDebugAssets
+> Task :core:ai-engines:prepareDebugArtProfile
+> Task :core:ai-engines:prepareLintJarForPublish
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:generateDebugAndroidTestResValues
+> Task :core:ai-engines:writeDebugLintModelMetadata
+> Task :app:extractProguardFiles
+> Task :core:ai-engines:extractProguardFiles
+> Task :core:ai-engines:preDebugAndroidTestBuild UP-TO-DATE
+> Task :core:ai-engines:generateDebugAndroidTestResValues
+> Task :core:ai-engines:compileDebugKotlin
+> Task :core:ai-engines:compileDebugJavaWithJavac
+> Task :core:ai-engines:bundleLibRuntimeToJarDebug
+> Task :core:ai-engines:bundleLibCompileToJarDebug
+> Task :core:ai-engines:processDebugJavaRes
+
+> Task :core:ai-engines:compileDebugUnitTestKotlin
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/CancellableHttpTest.kt:31:36 'fun create(contentType: MediaType?, content: String): ResponseBody' is deprecated. Moved to extension function. Put the 'content' argument first to fix Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/CancellableHttpTest.kt:42:36 'fun create(contentType: MediaType?, content: String): ResponseBody' is deprecated. Moved to extension function. Put the 'content' argument first to fix Java.
+
+> Task :core:ai-engines:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :core:ai-engines:processDebugUnitTestJavaRes
+
+> Task :core:ai-engines:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+
+> Task :core:ai-engines:extractDebugAnnotations
+> Task :core:ai-engines:mergeDebugGeneratedProguardFiles
+> Task :core:ai-engines:mergeDebugConsumerProguardFiles
+> Task :core:ai-engines:mergeDebugJavaResource
+> Task :core:ai-engines:syncDebugLibJars
+> Task :core:ai-engines:bundleDebugLocalLintAar
+> Task :core:ai-engines:createFullJarDebug
+> Task :core:ai-engines:generateDebugLintModel
+> Task :app:compileDebugKotlin
+> Task :core:ai-engines:lintAnalyzeDebug
+
+> Task :app:compileDebugKotlin
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/account/AccountManager.kt:7:8 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/account/AccountManager.kt:9:8 'class GoogleSignInClient : GoogleApi<GoogleSignInOptions!>' is deprecated. Deprecated in Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/account/AccountManager.kt:39:25 'class GoogleSignInClient : GoogleApi<GoogleSignInOptions!>' is deprecated. Deprecated in Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/account/AccountManager.kt:44:9 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/account/AccountManager.kt:50:55 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/account/AccountManager.kt:99:20 'class GoogleSignIn : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayBubbleController.kt:119:56 'static field SOFT_INPUT_ADJUST_RESIZE: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/ui/SettingsHub.kt:42:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/ui/SparkIcons.kt:36:9 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/ui/SparkIcons.kt:37:9 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/ui/SparkIcons.kt:38:9 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/src/main/java/com/voiceagent/oneplus13/ui/SparkIcons.kt:39:9 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:processDebugJavaRes
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:generateDebugLintReportModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+
+> Task :app:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace/voiceagent-tools/user-home -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :app:testDebugUnitTest
+
+MessengerBridgeTest > stoppingBridgePreservesUnrelatedParentScopeWork FAILED
+    java.lang.AssertionError at MessengerBridgeTest.kt:45
+
+> Task :app:lintAnalyzeDebug
+
+> Task :app:testDebugUnitTest FAILED
+
+WorkflowCancellationTest > cancellationAtStepBoundaryPreventsSystemAction FAILED
+    org.mockito.exceptions.verification.NoInteractionsWanted at WorkflowCancellationTest.kt:11
+
+116 tests completed, 2 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///workspace/work/voiceagent/VoiceAgent-latest/VoiceAgent-v2/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 5m 22s
+72 actionable tasks: 72 executed

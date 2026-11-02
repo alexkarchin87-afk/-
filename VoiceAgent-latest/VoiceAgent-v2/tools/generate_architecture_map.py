@@ -129,7 +129,7 @@ def inspect(root):
         for token in tokens:
             while token.startswith(PREFIX):
                 deps.update(symbols.get(token, ()))
-                token = token.rsplit('.', 1)[0] if '.' in token else '' 
+                token = token.rsplit('.', 1)[0] if '.' in token else ''
         for sibling in packages[source['package']]:
             if words.intersection(sources[sibling]['symbols']): deps.add(sibling)
         deps.discard(path)
