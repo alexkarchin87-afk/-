@@ -220,7 +220,7 @@ class AgentOrchestrator(
 
         workflowStorage.findByTriggerIn(text)?.let { workflow ->
             AgentEventBus.publish(AgentEvent.ActionRequested("run_workflow", mapOf("name" to workflow.name)))
-            proposeAction("run_workflow", mapOf("name" to workflow.name))
+            proposeAction("run_workflow", mapOf("name" to workflow.name, "workflow_id" to workflow.id))
             return
         }
 
@@ -288,8 +288,23 @@ class AgentOrchestrator(
             }
             params + mapOf("notification_key" to target.key, "notification_time" to target.postTime.toString(),
                 "recipient" to target.label)
+        } else if (action == "run_workflow") {
+            val workflow = params["workflow_id"]?.let { workflowStorage.load(it) }
+                ?: params["name"]?.let { workflowStorage.findByName(it) }
+            if (workflow == null) {
+                tts.speak("Сценарий не найден. Уточните название и повторите команду.")
+                return
+            }
+            // Bind consent to one exact stored workflow, not a mutable name.
+            params + mapOf(
+                "name" to workflow.name,
+                "workflow_id" to workflow.id,
+                "workflow_snapshot" to workflow.toJson().toString()
+            )
         } else params.toMap()
-        val details = boundParams.filterKeys { it !in setOf("notification_key", "notification_time") }
+        val details = boundParams.filterKeys {
+            it !in setOf("notification_key", "notification_time", "workflow_id", "workflow_snapshot")
+        }
             .entries.joinToString("; ") { "${it.key}: ${it.value}" }
         val question = if (action == "open_app")
             "Открыть приложение ${params["package"]}? Скажите да или нет."
@@ -694,9 +709,15 @@ class AgentOrchestrator(
             tts.speak("Какой сценарий запустить?")
             return
         }
-        val workflow = workflowStorage.findByName(name)
+        val workflow = params["workflow_id"]?.let { workflowStorage.load(it) }
+            ?: if ("workflow_id" in params) null else workflowStorage.findByName(name)
         if (workflow == null) {
             tts.speak("Не нашёл сценарий \"$name\". Собери его сначала в Мастерской сценариев.")
+            return
+        }
+        val approvedSnapshot = params["workflow_snapshot"]
+        if (approvedSnapshot == null || workflow.toJson().toString() != approvedSnapshot) {
+            tts.speak("Сценарий изменился после запроса подтверждения. Повтори команду и подтверди новую версию.")
             return
         }
         runWorkflow(workflow)
