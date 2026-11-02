@@ -2,6 +2,8 @@ package com.voiceagent.oneplus13.workflow
 
 import com.voiceagent.oneplus13.core.TTSEngine
 import com.voiceagent.oneplus13.system.SystemController
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 
 /**
@@ -33,19 +35,23 @@ class WorkflowRunner(
         }
         var stepsRun = 0
         for (current in plan) {
+            currentCoroutineContext().ensureActive()
             onStep(StepResult.Started(current))
+            currentCoroutineContext().ensureActive()
             val ok = try { runBlock(current) }
             catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) {
                 onStep(StepResult.Failed(current, e.message ?: "Ошибка шага"))
                 return
             }
+            currentCoroutineContext().ensureActive()
             if (!ok) {
                 onStep(StepResult.Failed(current, "Шаг не выполнился"))
                 return
             }
             stepsRun++
         }
+        currentCoroutineContext().ensureActive()
         onStep(StepResult.Finished(stepsRun))
     }
 

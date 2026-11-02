@@ -42,6 +42,68 @@ class MessengerBridgeTest {
         CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext[Job]))
     )
 
+    @Test fun oldTelegramGenerationCannotPublishOrAdvanceNewOffset() = runTest {
+        val offsets = mutableListOf<Long>()
+        val events = mutableListOf<com.voiceagent.oneplus13.core.AgentEvent>()
+        var pending: kotlin.coroutines.Continuation<Pair<Long, List<Msg>>>? = null
+        doAnswer { invocation ->
+            offsets += invocation.getArgument<Long>(0)
+            if (offsets.size == 1) {
+                @Suppress("UNCHECKED_CAST")
+                pending = invocation.rawArguments.last() as kotlin.coroutines.Continuation<Pair<Long, List<Msg>>>
+                kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+            } else 7L to emptyList<Msg>()
+        }.`when`(telegram).pollUpdates(anyLong())
+        `when`(max.pollUpdates()).thenReturn(emptyList())
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            AgentEventBus.events.collect { events += it }
+        }
+        val bridge = bridge()
+        try {
+            bridge.startPolling(); runCurrent()
+            bridge.stopPolling(); bridge.startPolling(); runCurrent()
+            pending!!.resumeWith(Result.success(99L to listOf(Msg(MessengerPlatform.TELEGRAM, "old", "old", "stale"))))
+            runCurrent(); advanceTimeBy(250); runCurrent()
+            assertEquals(listOf(0L, 0L, 7L), offsets)
+            assertEquals(emptyList<com.voiceagent.oneplus13.core.AgentEvent>(), events)
+        } finally { bridge.stopPolling(); collector.cancel() }
+    }
+
+    @Test fun oldMaxGenerationCannotPublishAfterRestart() = runTest {
+        var pending: kotlin.coroutines.Continuation<List<Msg>>? = null
+        var count = 0
+        val events = mutableListOf<com.voiceagent.oneplus13.core.AgentEvent>()
+        doAnswer { invocation ->
+            if (count++ == 0) {
+                @Suppress("UNCHECKED_CAST")
+                pending = invocation.rawArguments.last() as kotlin.coroutines.Continuation<List<Msg>>
+                kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+            } else emptyList<Msg>()
+        }.`when`(max).pollUpdates()
+        `when`(telegram.pollUpdates(anyLong())).thenReturn(0L to emptyList())
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            AgentEventBus.events.collect { events += it }
+        }
+        val bridge = bridge()
+        try {
+            bridge.startPolling(); runCurrent()
+            bridge.stopPolling(); bridge.startPolling(); runCurrent()
+            pending!!.resumeWith(Result.success(listOf(Msg(MessengerPlatform.MAX, "old", "old", "stale"))))
+            runCurrent()
+            assertEquals(emptyList<com.voiceagent.oneplus13.core.AgentEvent>(), events)
+        } finally { bridge.stopPolling(); collector.cancel() }
+    }
+
+    @Test fun stoppingBridgePreservesUnrelatedParentScopeWork() = runTest {
+        val owner = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext[Job]))
+        val unrelated = owner.launch { awaitCancellation() }
+        val bridge = MessengerBridge(telegram, max, null, owner)
+        bridge.startPolling()
+        bridge.stopPolling()
+        org.junit.Assert.assertTrue("Bridge must cancel only its own polling jobs", unrelated.isActive)
+        unrelated.cancel()
+    }
+
     @Test fun restartDoesNotAcknowledgeBatchWhosePublicationWasCancelled() = runTest {
         val offsets = mutableListOf<Long>()
         val batch = List(40) { Msg(MessengerPlatform.TELEGRAM, "chat", "sender", "message $it") }

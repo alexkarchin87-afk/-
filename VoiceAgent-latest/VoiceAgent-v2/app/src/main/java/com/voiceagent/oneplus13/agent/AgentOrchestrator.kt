@@ -20,6 +20,7 @@ import com.voiceagent.oneplus13.devassist.CodeGenAgent
 import com.voiceagent.oneplus13.devassist.ProjectStorage
 import com.voiceagent.oneplus13.integrations.messenger.TokenCapture
 import com.voiceagent.oneplus13.lecture.LectureCommands
+import com.voiceagent.oneplus13.notes.NotesActions
 import com.voiceagent.oneplus13.notes.NotesBuilder
 import com.voiceagent.oneplus13.notes.NotesStorage
 import com.voiceagent.oneplus13.system.ChatsDigest
@@ -67,8 +68,7 @@ class AgentOrchestrator(
     private val projectStorage = ProjectStorage(context)
     private val tokenCapture = TokenCapture(secrets)
     private val userMemory = UserMemory(context)
-    private val notesBuilder = NotesBuilder(llm)
-    private val notesStorage = NotesStorage(context)
+    private val notesActions = NotesActions(NotesBuilder(llm), NotesStorage(context), tts, ::ensureRequestActive)
     private val chatsDigest = ChatsDigest(context, llm)
     private val featureRequests = FeatureRequests(context)
     private val workflowStorage = WorkflowStorage(context)
@@ -90,7 +90,6 @@ class AgentOrchestrator(
     }
 
     private var lastGeneratedProjectName: String? = null
-    private var lastNotesTopic: String? = null
     private val confirmations = ConfirmationSlot<PendingConfirmation>()
     private var pendingCodeChoice: PendingCodeChoice? = null
     private var pendingGrantPermissions = false
@@ -221,7 +220,7 @@ class AgentOrchestrator(
 
         workflowStorage.findByTriggerIn(text)?.let { workflow ->
             AgentEventBus.publish(AgentEvent.ActionRequested("run_workflow", mapOf("name" to workflow.name)))
-            proposeAction("run_workflow", mapOf("name" to workflow.name))
+            proposeAction("run_workflow", mapOf("name" to workflow.name, "workflow_id" to workflow.id))
             return
         }
 
@@ -289,8 +288,23 @@ class AgentOrchestrator(
             }
             params + mapOf("notification_key" to target.key, "notification_time" to target.postTime.toString(),
                 "recipient" to target.label)
+        } else if (action == "run_workflow") {
+            val workflow = params["workflow_id"]?.let { workflowStorage.load(it) }
+                ?: params["name"]?.let { workflowStorage.findByName(it) }
+            if (workflow == null) {
+                tts.speak("Сценарий не найден. Уточните название и повторите команду.")
+                return
+            }
+            // Bind consent to one exact stored workflow, not a mutable name.
+            params + mapOf(
+                "name" to workflow.name,
+                "workflow_id" to workflow.id,
+                "workflow_snapshot" to workflow.toJson().toString()
+            )
         } else params.toMap()
-        val details = boundParams.filterKeys { it !in setOf("notification_key", "notification_time") }
+        val details = boundParams.filterKeys {
+            it !in setOf("notification_key", "notification_time", "workflow_id", "workflow_snapshot")
+        }
             .entries.joinToString("; ") { "${it.key}: ${it.value}" }
         val question = if (action == "open_app")
             "Открыть приложение ${params["package"]}? Скажите да или нет."
@@ -414,8 +428,8 @@ class AgentOrchestrator(
             "toggle_bluetooth" -> handleRootToggle(RootActions.Toggle.BLUETOOTH, params)
             "toggle_mobile_data" -> handleRootToggle(RootActions.Toggle.MOBILE_DATA, params)
             "install_app" -> handleInstallApp(params)
-            "notes_build" -> handleNotesBuild(params)
-            "notes_extend" -> handleNotesExtend(params)
+            "notes_build" -> notesActions.build(params)
+            "notes_extend" -> notesActions.extend(params)
             "run_workflow" -> handleRunWorkflowByName(params)
             "create_workflow" -> handleCreateWorkflow(params)
             "remember_fact" -> params["fact"]?.let { fact ->
@@ -688,49 +702,6 @@ class AgentOrchestrator(
         }
     }
 
-    /** "Собери конспект по..." — из присланных источников (текст лекции, слайды,
-     *  учебник, описания схем) собирает один структурированный конспект и
-     *  сохраняет его под именем темы, чтобы потом можно было дополнить. */
-    private suspend fun handleNotesBuild(params: Map<String, String>) {
-        val topic = params["topic"]?.takeIf { it.isNotBlank() } ?: "Конспект"
-        val sources = params["sources"]
-        if (sources.isNullOrBlank()) {
-            tts.speak("Не вижу материалов для конспекта — пришли текст, слайды или фото учебника.")
-            return
-        }
-        tts.speak("Собираю конспект, секунду.")
-        val notes = notesBuilder.build(topic, listOf(sources))
-        ensureRequestActive()
-        notesStorage.save(topic, notes)
-        lastNotesTopic = topic
-        AgentEventBus.publish(AgentEvent.Reply(notes))
-        tts.speak("Готово, конспект \"$topic\" сохранён. Можешь попросить дополнить его позже.")
-    }
-
-    /** "Дополни конспект..." — находит нужное место в уже собранном конспекте и
-     *  вписывает туда новую информацию, не переписывая всё с нуля. */
-    private suspend fun handleNotesExtend(params: Map<String, String>) {
-        val addition = params["addition"]
-        if (addition.isNullOrBlank()) return
-        val topic = params["topic"]?.takeIf { it.isNotBlank() } ?: lastNotesTopic ?: notesStorage.latestTopic()
-        if (topic == null) {
-            tts.speak("Не помню, какой конспект дополнять — скажи его тему.")
-            return
-        }
-        val existing = notesStorage.load(topic)
-        if (existing == null) {
-            tts.speak("Не нашёл конспект \"$topic\".")
-            return
-        }
-        tts.speak("Дополняю конспект, секунду.")
-        val updated = notesBuilder.extend(existing, addition)
-        ensureRequestActive()
-        notesStorage.save(topic, updated)
-        lastNotesTopic = topic
-        AgentEventBus.publish(AgentEvent.Reply(updated))
-        tts.speak("Дополнил конспект \"$topic\".")
-    }
-
     /** "Запусти сценарий Х" — ищет сохранённый сценарий по имени и выполняет. */
     private suspend fun handleRunWorkflowByName(params: Map<String, String>) {
         val name = params["name"]
@@ -738,9 +709,15 @@ class AgentOrchestrator(
             tts.speak("Какой сценарий запустить?")
             return
         }
-        val workflow = workflowStorage.findByName(name)
+        val workflow = params["workflow_id"]?.let { workflowStorage.load(it) }
+            ?: if ("workflow_id" in params) null else workflowStorage.findByName(name)
         if (workflow == null) {
             tts.speak("Не нашёл сценарий \"$name\". Собери его сначала в Мастерской сценариев.")
+            return
+        }
+        val approvedSnapshot = params["workflow_snapshot"]
+        if (approvedSnapshot == null || workflow.toJson().toString() != approvedSnapshot) {
+            tts.speak("Сценарий изменился после запроса подтверждения. Повтори команду и подтверди новую версию.")
             return
         }
         runWorkflow(workflow)
