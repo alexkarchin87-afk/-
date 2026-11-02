@@ -1,0 +1,25 @@
+name: VoiceAgent architecture
+on:
+  push:
+    paths:
+      - 'VoiceAgent-latest/VoiceAgent-v2/**'
+      - '.github/workflows/voiceagent-architecture.yml'
+  pull_request:
+    paths:
+      - 'VoiceAgent-latest/VoiceAgent-v2/**'
+      - '.github/workflows/voiceagent-architecture.yml'
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: VoiceAgent-latest/VoiceAgent-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tools/generate_architecture_map.py --check
+      - run: python -m unittest discover -s tools/tests -v

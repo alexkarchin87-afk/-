@@ -1,0 +1,406 @@
+{
+  "version": 1,
+  "components": [
+    {
+      "id": "entry",
+      "purpose": "Точки входа и настройки",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/MainActivity.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/SettingsActivity.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/SettingsAvailability.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/VoiceAgentApp.kt"
+      ],
+      "tests": [],
+      "readme": "architecture/entry/README.md",
+      "allowed_dependencies": [
+        "overlay",
+        "security",
+        "system",
+        "workflow-ui",
+        "persistence",
+        "ui",
+        "service",
+        "account"
+      ]
+    },
+    {
+      "id": "agent",
+      "purpose": "Маршрутизация и подтверждение действий",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/agent/ActionPolicy.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/agent/AgentOrchestrator.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/agent/AgentParsing.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/agent/AgentPrompts.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/agent/ConfirmationSlot.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/agent/LocalAppCommand.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/agent/ActionSafetyTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/agent/AgentOrchestratorRouteTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/agent/AgentParsingTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/agent/LocalAppCommandTest.kt"
+      ],
+      "readme": "architecture/agent/README.md",
+      "allowed_dependencies": [
+        "common",
+        "events",
+        "security",
+        "lecture",
+        "system",
+        "developer",
+        "messenger",
+        "llm",
+        "voice",
+        "persistence",
+        "workflow",
+        "notes"
+      ]
+    },
+    {
+      "id": "service",
+      "purpose": "Жизненный цикл голосового сервиса",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/core/VoiceAgentService.kt"
+      ],
+      "tests": [],
+      "readme": "architecture/service/README.md",
+      "allowed_dependencies": [
+        "overlay",
+        "ui",
+        "llm",
+        "events",
+        "entry",
+        "voice",
+        "agent"
+      ]
+    },
+    {
+      "id": "events",
+      "purpose": "События процесса",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/core/AgentEventBus.kt"
+      ],
+      "tests": [],
+      "readme": "architecture/events/README.md",
+      "allowed_dependencies": []
+    },
+    {
+      "id": "persistence",
+      "purpose": "Память, резервные копии и диагностика сбоев",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/core/BackupCodec.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/core/BackupManager.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/core/CrashLogger.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/core/FeatureRequests.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/core/MemoryImport.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/core/SettingsImport.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/core/UserMemory.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/core/BackupCodecTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/core/SettingsImportTest.kt"
+      ],
+      "readme": "architecture/persistence/README.md",
+      "allowed_dependencies": [
+        "ui",
+        "security"
+      ]
+    },
+    {
+      "id": "common",
+      "purpose": "Разбор JSON ответов",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/core/JsonExtraction.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/core/JsonExtractionTest.kt"
+      ],
+      "readme": "architecture/common/README.md",
+      "allowed_dependencies": []
+    },
+    {
+      "id": "voice",
+      "purpose": "Микрофон, STT, TTS и состояния аудио",
+      "files": [
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/AudioCaptureGate.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/STTEngine.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/TTSEngine.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoiceRuntime.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoskModelFiles.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/VoskModelLoader.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/WakeCommand.kt"
+      ],
+      "tests": [
+        "core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/AudioCaptureGateTest.kt",
+        "core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/VoiceRuntimeTest.kt",
+        "core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/VoskModelFilesTest.kt",
+        "core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/WakeCommandTest.kt"
+      ],
+      "readme": "architecture/voice/README.md",
+      "allowed_dependencies": []
+    },
+    {
+      "id": "llm",
+      "purpose": "LLM и отменяемый HTTP",
+      "files": [
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/CancellableHttp.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/LLMClient.kt"
+      ],
+      "tests": [
+        "core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/CancellableHttpTest.kt"
+      ],
+      "readme": "architecture/llm/README.md",
+      "allowed_dependencies": [
+        "security"
+      ]
+    },
+    {
+      "id": "security",
+      "purpose": "Зашифрованные секреты и атомарные настройки",
+      "files": [
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/security/SecretsStore.kt",
+        "core/ai-engines/src/main/java/com/voiceagent/oneplus13/core/security/SettingsLock.kt"
+      ],
+      "tests": [
+        "core/ai-engines/src/test/java/com/voiceagent/oneplus13/core/security/SettingsCommitterTest.kt"
+      ],
+      "readme": "architecture/security/README.md",
+      "allowed_dependencies": []
+    },
+    {
+      "id": "notes",
+      "purpose": "Конспекты: сборка, дополнение и хранение",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/notes/NotesActions.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/notes/NotesBuilder.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/notes/NotesStorage.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/agent/AgentOrchestratorRouteTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/notes/NotesActionsTest.kt"
+      ],
+      "readme": "architecture/notes/README.md",
+      "allowed_dependencies": [
+        "llm",
+        "voice",
+        "events"
+      ]
+    },
+    {
+      "id": "lecture",
+      "purpose": "Запись лекций и восстановление резюме",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureChunkProcessor.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureCommands.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureRecorder.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureRepository.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureSession.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureStorage.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureSummarizer.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/lecture/LectureSummaryRecovery.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/lecture/LectureRepositoryTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/lecture/LectureSummaryRecoveryTest.kt"
+      ],
+      "readme": "architecture/lecture/README.md",
+      "allowed_dependencies": [
+        "voice",
+        "llm",
+        "events"
+      ]
+    },
+    {
+      "id": "developer",
+      "purpose": "Генерация и сохранение пользовательских проектов",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/devassist/CodeGenAgent.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/devassist/ProjectFile.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/devassist/ProjectNaming.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/devassist/ProjectReader.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/devassist/ProjectStorage.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/devassist/ProjectReaderTest.kt"
+      ],
+      "readme": "architecture/developer/README.md",
+      "allowed_dependencies": [
+        "common",
+        "llm"
+      ]
+    },
+    {
+      "id": "messenger",
+      "purpose": "Telegram, MAX, WhatsApp и захват токенов",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/integrations/bot/TelegramBotService.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/MaxClient.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/MessengerBridge.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/TelegramClient.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/TokenCapture.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/WhatsAppClient.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/integrations/messenger/models/Msg.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/integrations/messenger/MessengerBridgeTest.kt"
+      ],
+      "readme": "architecture/messenger/README.md",
+      "allowed_dependencies": [
+        "entry",
+        "security",
+        "llm",
+        "events"
+      ]
+    },
+    {
+      "id": "system",
+      "purpose": "Android API, уведомления, root и системные действия",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/system/AccessibilityAgent.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/AppLabelResolver.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/BootReceiver.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/ChatsDigest.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/Diagnostics.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/DigestBatch.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/MediaSessionReader.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/NotificationBuffer.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/NotificationReader.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/RootActions.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/RootPermissions.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/SystemController.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/system/AppLabelResolverTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/system/ChatsDigestTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/system/DigestBatchTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/system/NotificationBufferTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/system/SystemControllerLaunchTest.kt"
+      ],
+      "readme": "architecture/system/README.md",
+      "allowed_dependencies": [
+        "events",
+        "security",
+        "messenger",
+        "llm",
+        "service",
+        "voice"
+      ]
+    },
+    {
+      "id": "automation",
+      "purpose": "Альтернативный SSE-конвейер и захват экрана",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/system/ScreenCaptureManager.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/SseEventParser.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/system/VanyaAutomationEngine.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/system/SseEventParserTest.kt"
+      ],
+      "readme": "architecture/automation/README.md",
+      "allowed_dependencies": [
+        "voice",
+        "events"
+      ]
+    },
+    {
+      "id": "workflow",
+      "purpose": "Модель, построение и исполнение сценариев",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/workflow/WorkflowAiBuilder.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/workflow/WorkflowModel.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/workflow/WorkflowRunner.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/workflow/WorkflowStorage.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/workflow/WorkflowCancellationTest.kt",
+        "app/src/test/java/com/voiceagent/oneplus13/workflow/WorkflowValidationTest.kt"
+      ],
+      "readme": "architecture/workflow/README.md",
+      "allowed_dependencies": [
+        "common",
+        "voice",
+        "system",
+        "llm"
+      ]
+    },
+    {
+      "id": "workflow-ui",
+      "purpose": "Редактор сценариев",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/ui/workflow/WorkflowEditorActivity.kt"
+      ],
+      "tests": [],
+      "readme": "architecture/workflow-ui/README.md",
+      "allowed_dependencies": [
+        "workflow",
+        "system",
+        "llm",
+        "ui",
+        "voice"
+      ]
+    },
+    {
+      "id": "overlay",
+      "purpose": "Системное плавающее окно",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayBubbleController.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayLifecycleOwner.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/overlay/OverlayPosition.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/overlay/OverlayPositionTest.kt"
+      ],
+      "readme": "architecture/overlay/README.md",
+      "allowed_dependencies": [
+        "ui",
+        "events"
+      ]
+    },
+    {
+      "id": "ui",
+      "purpose": "Чат, статус, адаптивный интерфейс и тема",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/ui/AdaptiveLayout.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/AgentSiriPanel.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/AttachmentChip.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/ChatComponents.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/CommandHistory.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/FloatingSparkButton.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/MainScreen.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/SettingsComponents.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/SettingsHub.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/SparkIcons.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/TextSubmission.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/UiPreferences.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/VaIcons.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/WindowsCornerPopup.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/theme/Color.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/theme/Theme.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/ui/theme/Type.kt"
+      ],
+      "tests": [
+        "app/src/test/java/com/voiceagent/oneplus13/ui/TextSubmissionTest.kt"
+      ],
+      "readme": "architecture/ui/README.md",
+      "allowed_dependencies": [
+        "security",
+        "events",
+        "voice"
+      ]
+    },
+    {
+      "id": "account",
+      "purpose": "Локальный Google account gate",
+      "files": [
+        "app/src/main/java/com/voiceagent/oneplus13/account/AccountGateScreen.kt",
+        "app/src/main/java/com/voiceagent/oneplus13/account/AccountManager.kt"
+      ],
+      "tests": [],
+      "readme": "architecture/account/README.md",
+      "allowed_dependencies": [
+        "ui"
+      ]
+    }
+  ]
+}
