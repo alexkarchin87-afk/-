@@ -42,6 +42,16 @@ class MessengerBridgeTest {
         CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext[Job]))
     )
 
+    @Test fun stoppingBridgePreservesUnrelatedParentScopeWork() = runTest {
+        val owner = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext[Job]))
+        val unrelated = owner.launch { awaitCancellation() }
+        val bridge = MessengerBridge(telegram, max, null, owner)
+        bridge.startPolling()
+        bridge.stopPolling()
+        org.junit.Assert.assertTrue("Bridge must cancel only its own polling jobs", unrelated.isActive)
+        unrelated.cancel()
+    }
+
     @Test fun restartDoesNotAcknowledgeBatchWhosePublicationWasCancelled() = runTest {
         val offsets = mutableListOf<Long>()
         val batch = List(40) { Msg(MessengerPlatform.TELEGRAM, "chat", "sender", "message $it") }
