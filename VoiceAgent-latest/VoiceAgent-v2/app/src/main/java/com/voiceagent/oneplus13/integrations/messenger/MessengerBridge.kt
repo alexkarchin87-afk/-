@@ -8,7 +8,7 @@ import com.voiceagent.oneplus13.integrations.messenger.models.Msg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
@@ -30,7 +30,7 @@ class MessengerBridge internal constructor(
         this(telegram, max, whatsApp, CoroutineScope(SupervisorJob()))
 
     private var telegramOffset = 0L
-    @Volatile private var polling = false
+    private var pollingJob: Job? = null
 
     private companion object {
         const val TAG = "VA_TELEGRAM"
@@ -38,21 +38,25 @@ class MessengerBridge internal constructor(
     }
 
     @Synchronized fun startPolling() {
-        if (polling) return
-        polling = true
+        if (pollingJob?.isActive == true) return
+        // One child owns this generation. Stopping it cannot cancel sibling work
+        // in an injected service scope; a restart gets a fresh child Job.
+        val owner = SupervisorJob(scope.coroutineContext[Job])
+        pollingJob = owner
+        val pollingScope = CoroutineScope(scope.coroutineContext + owner)
         Log.i(TAG, "polling=start")
-        scope.launch { pollTelegramLoop() }
-        scope.launch { pollMaxLoop() }
+        pollingScope.launch { pollTelegramLoop() }
+        pollingScope.launch { pollMaxLoop() }
     }
 
     @Synchronized fun stopPolling() {
-        polling = false
-        scope.coroutineContext[Job]?.cancelChildren()
+        pollingJob?.cancel()
+        pollingJob = null
         Log.i(TAG, "polling=stop")
     }
 
     private suspend fun pollTelegramLoop() {
-        while (polling) {
+        while (currentCoroutineContext().isActive) {
             // Сетевой сбой раньше не ловился: исключение из корутины без обработчика валило
             // приложение. Теперь — пауза и повтор (и без горячего цикла при мгновенных ошибках).
             try {
@@ -88,9 +92,11 @@ class MessengerBridge internal constructor(
     }
 
     private suspend fun pollMaxLoop() {
-        while (polling) {
+        while (currentCoroutineContext().isActive) {
             try {
-                max.pollUpdates().forEach { publishInbound(it) }
+                val messages = max.pollUpdates()
+                currentCoroutineContext().ensureActive()
+                messages.forEach { publishInbound(it) }
                 delay(3000)
             } catch (e: CancellationException) {
                 throw e
@@ -101,6 +107,7 @@ class MessengerBridge internal constructor(
     }
 
     private suspend fun publishInbound(msg: Msg) {
+        currentCoroutineContext().ensureActive()
         AgentEventBus.publish(
             AgentEvent.ActionRequested(
                 action = "messenger_received",
