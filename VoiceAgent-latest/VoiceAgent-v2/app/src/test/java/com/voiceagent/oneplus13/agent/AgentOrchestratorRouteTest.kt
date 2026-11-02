@@ -112,11 +112,58 @@ class AgentOrchestratorRouteTest {
     }
     @Test fun configuredWorkflowRetainsPriorityOverLocalTelegramShortcut()=runTest {
         val agent=agent()
-        `when`(workflows.constructed().single().findByTriggerIn("открой Telegram"))
-            .thenReturn(com.voiceagent.oneplus13.workflow.Workflow(name="Мой сценарий",triggerPhrase="открой Telegram"))
+        val workflow = com.voiceagent.oneplus13.workflow.Workflow(id="workflow-test", name="Мой сценарий",triggerPhrase="открой Telegram")
+        `when`(workflows.constructed().single().findByTriggerIn("открой Telegram")).thenReturn(workflow)
+        `when`(workflows.constructed().single().load(workflow.id)).thenReturn(workflow)
         agent.handleTranscript("открой Telegram")
         verify(tts).speak("Подтвердите действие run_workflow (name: Мой сценарий). Скажите да или нет.")
         verify(systems.constructed().single(),never()).openAppResult(anyString());verifyNoInteractions(llm)
+    }
+
+    @Test fun unchangedWorkflowExecutesAfterConsent()=runTest {
+        val wf = com.voiceagent.oneplus13.workflow.Workflow(id="stable-1", name="Тест")
+        wf.blocks += com.voiceagent.oneplus13.workflow.WorkflowBlock(
+            id="step1", type=com.voiceagent.oneplus13.workflow.BlockType.OPEN_APP,
+            params=mutableMapOf("package" to "org.telegram.messenger")
+        )
+        val storage=workflows.constructed().single()
+        `when`(storage.findByName("Тест")).thenReturn(wf)
+        `when`(storage.load("stable-1")).thenReturn(wf)
+        reply("""{"action":"run_workflow","params":{"name":"Тест"}}""")
+        val agent=agent();agent.handleTranscript("запусти сценарий Тест","voice")
+        verify(systems.constructed().single(),never()).openApp(anyString())
+        agent.handleTranscript("да","voice")
+        verify(systems.constructed().single(),times(1)).openApp("org.telegram.messenger")
+    }
+    @Test fun modifiedWorkflowCannotExecuteAfterConsent()=runTest {
+        val wf = com.voiceagent.oneplus13.workflow.Workflow(id="stable-2", name="Тест")
+        wf.blocks += com.voiceagent.oneplus13.workflow.WorkflowBlock(
+            id="step1", type=com.voiceagent.oneplus13.workflow.BlockType.OPEN_APP,
+            params=mutableMapOf("package" to "org.telegram.messenger")
+        )
+        val storage=workflows.constructed().single()
+        `when`(storage.findByName("Тест")).thenReturn(wf)
+        `when`(storage.load("stable-2")).thenReturn(wf)
+        reply("""{"action":"run_workflow","params":{"name":"Тест"}}""")
+        val agent=agent();agent.handleTranscript("запусти сценарий Тест","voice")
+        wf.blocks.single().params["package"]="com.changed.application"
+        agent.handleTranscript("да","voice")
+        verify(systems.constructed().single(),never()).openApp(anyString())
+        verify(tts).speak(contains("Сценарий изменился"))
+    }
+    @Test fun deletedWorkflowCannotExecuteAfterConsent()=runTest {
+        val wf = com.voiceagent.oneplus13.workflow.Workflow(id="stable-3", name="Тест")
+        wf.blocks += com.voiceagent.oneplus13.workflow.WorkflowBlock(
+            id="step1", type=com.voiceagent.oneplus13.workflow.BlockType.OPEN_APP,
+            params=mutableMapOf("package" to "org.telegram.messenger")
+        )
+        val storage=workflows.constructed().single()
+        `when`(storage.findByName("Тест")).thenReturn(wf)
+        `when`(storage.load("stable-3")).thenReturn(wf, null)
+        reply("""{"action":"run_workflow","params":{"name":"Тест"}}""")
+        val agent=agent();agent.handleTranscript("запусти сценарий Тест","voice")
+        agent.handleTranscript("да","voice")
+        verify(systems.constructed().single(),never()).openApp(anyString())
     }
 
     private suspend fun TestScope.checkLateAction(actionJson: String, lateReply: String, cancel: Boolean = false) {
